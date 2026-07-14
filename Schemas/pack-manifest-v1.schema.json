@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lyra.example/schemas/pack-manifest-v1.schema.json",
+  "title": "Lyra Effect Pack Manifest v1",
+  "type": "object",
+  "required": ["schemaVersion", "id", "name", "version", "kind", "family", "author", "license", "compatibility", "entry", "capabilities"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:\\.[a-z0-9][a-z0-9-]*)+$" },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string" },
+    "kind": { "enum": ["theme", "web-effect"] },
+    "family": { "type": "string", "minLength": 1 },
+    "author": { "type": "object", "required": ["name"] },
+    "license": { "type": "object", "required": ["spdx"] },
+    "compatibility": { "type": "object", "required": ["packSchema", "runtimeApi", "bridgeApi"] },
+    "entry": { "type": "object" },
+    "capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "parameters": { "type": "string" },
+    "scenarios": { "type": "array", "items": { "type": "string" } },
+    "integrity": { "type": "string" }
+  }
+}

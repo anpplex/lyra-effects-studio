@@ -1,0 +1,17 @@
+{
+  "author": { "name": "Lyra Contributors" },
+  "capabilities": ["styles"],
+  "compatibility": {
+    "bridgeApi": ">=1.0.0 <2.0.0",
+    "packSchema": ">=1 <2",
+    "runtimeApi": ">=1.0.0 <2.0.0"
+  },
+  "entry": { "style": "theme/lyra.css" },
+  "family": "better-lyrics",
+  "id": "org.lyra.effects.sample",
+  "kind": "theme",
+  "license": { "spdx": "Apache-2.0" },
+  "name": "Sample Theme",
+  "schemaVersion": 1,
+  "version": "1.0.0"
+}
