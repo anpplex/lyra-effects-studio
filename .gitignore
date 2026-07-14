@@ -2,6 +2,9 @@
 .build/
 .swiftpm/
 target/
+node_modules/
+apps/studio/dist/
+apps/studio/node_modules/
 .worktrees/
 DerivedData/
 *.xcuserstate

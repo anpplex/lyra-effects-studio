@@ -13,6 +13,15 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm ci --prefix apps/studio
+      - name: Validate frontend
+        run: |
+          npm run studio:lint
+          npm run studio:test
+          npm run studio:build
       - name: Toolchain
         run: rustup toolchain install 1.97.0 --profile minimal --component clippy,rustfmt
       - name: Format

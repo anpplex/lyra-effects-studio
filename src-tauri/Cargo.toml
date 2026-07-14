@@ -1,0 +1,28 @@
+[package]
+name = "lyra-effects-studio-app"
+description = "Cross-platform Tauri shell for Lyra Effects Studio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "lyra_effects_studio_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "2.11.3", features = [] }
+lyra-pack = { path = "../crates/lyra-pack" }
+lyra-project = { path = "../crates/lyra-project" }
+lyra-registry = { path = "../crates/lyra-registry" }
+
+[lints]
+workspace = true
