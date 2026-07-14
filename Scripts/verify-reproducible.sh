@@ -22,8 +22,8 @@ diff -qr --exclude='registry-v1.json' --exclude='registry-v1.sig' "$TEMP_ROOT/on
 jq 'del(.packs[].signature)' "$TEMP_ROOT/one/registry-v1.json" > "$TEMP_ROOT/one.normalized.json"
 jq 'del(.packs[].signature)' "$TEMP_ROOT/two/registry-v1.json" > "$TEMP_ROOT/two.normalized.json"
 diff -u "$TEMP_ROOT/one.normalized.json" "$TEMP_ROOT/two.normalized.json"
-swift run --package-path "$REPO_ROOT" -c release --skip-build lyra-effects registry verify-site "$TEMP_ROOT/one" >/dev/null
-swift run --package-path "$REPO_ROOT" -c release --skip-build lyra-effects registry verify-site "$TEMP_ROOT/two" >/dev/null
+"$REPO_ROOT/target/release/lyra-effects" registry verify-site "$TEMP_ROOT/one" >/dev/null
+"$REPO_ROOT/target/release/lyra-effects" registry verify-site "$TEMP_ROOT/two" >/dev/null
 after_status="$(git -C "$REPO_ROOT" status --porcelain=v1 --untracked-files=all)"
 if [[ "$before_status" != "$after_status" ]]; then
   echo "Registry build modified the source tree." >&2

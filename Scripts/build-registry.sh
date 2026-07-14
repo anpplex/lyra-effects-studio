@@ -38,7 +38,8 @@ KEY_ID="${LYRA_REGISTRY_KEY_ID:-lyra-official-v1}"
 
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/packs"
-swift build --package-path "$REPO_ROOT" -c release --product lyra-effects >/dev/null
+cargo build --manifest-path "$REPO_ROOT/Cargo.toml" --release --bin lyra-effects >/dev/null
+CLI="$REPO_ROOT/target/release/lyra-effects"
 
 packs='[]'
 for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
@@ -51,10 +52,10 @@ for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
   archive="$version_dir/pack.lyra-pack.zip"
   mkdir -p "$version_dir"
 
-  pack_result="$(swift run --package-path "$REPO_ROOT" -c release --skip-build lyra-effects pack "$pack_dir" "$archive")"
+  pack_result="$("$CLI" pack "$pack_dir" "$archive")"
   sha256="$(jq -er '.data.sha256' <<<"$pack_result")"
   size="$(jq -er '.data.byteCount' <<<"$pack_result")"
-  sign_result="$(swift run --package-path "$REPO_ROOT" -c release --skip-build lyra-effects registry sign-checksum "$sha256" "$KEY_FILE")"
+  sign_result="$("$CLI" registry sign-checksum "$sha256" "$KEY_FILE")"
   signature="$(jq -er '.data.signature' <<<"$sign_result")"
   cp "$manifest" "$version_dir/lyra-pack.json"
 
@@ -74,10 +75,8 @@ jq -cn \
   '{schemaVersion:1,registryId:$registryId,name:$name,generatedAt:$generatedAt,keyId:$keyId,packs:$packs}' \
   > "$unsigned_catalog"
 
-swift run --package-path "$REPO_ROOT" -c release --skip-build lyra-effects \
-  registry build "$unsigned_catalog" "$OUTPUT_DIR" "$KEY_FILE" >/dev/null
+"$CLI" registry build "$unsigned_catalog" "$OUTPUT_DIR" "$KEY_FILE" >/dev/null
 rm -f "$unsigned_catalog"
-swift run --package-path "$REPO_ROOT" -c release --skip-build lyra-effects \
-  registry verify-site "$OUTPUT_DIR" >/dev/null
+"$CLI" registry verify-site "$OUTPUT_DIR" >/dev/null
 
 printf '{"output":"%s","packCount":%s,"generatedAt":"%s"}\n' "$OUTPUT_DIR" "$(jq '.packs | length' "$OUTPUT_DIR/registry-v1.json")" "$GENERATED_AT"

@@ -4,11 +4,13 @@ Theme Pack archives are fully reproducible: source order, timestamps, permission
 
 Unsigned Catalog semantics are also reproducible. The reproducibility gate compares canonical Catalogs after removing Pack signature values, then independently verifies every generated Pack and Catalog signature.
 
-Signature bytes themselves are intentionally not reproducible when generated with Apple CryptoKit. CryptoKit randomizes Ed25519 signatures for the same key and message as a side-channel defense, as documented by Apple in [`signature(for:)`](https://developer.apple.com/documentation/cryptokit/curve25519/signing/privatekey/signature%28for%3A%29). Different signature bytes are valid only when all of these remain true:
+The current Rust signer uses `ed25519-dalek` and produces stable standard Ed25519 signatures for a fixed key and message. The verifier also accepts the committed signatures created by Apple CryptoKit, so migration does not change the public key or detached-signature wire format. Reproducibility never relies on signature byte equality alone; all of these must remain true:
 
 - The corresponding unsigned bytes, SHA-256 and public key are unchanged.
 - The detached Catalog signature verifies over canonical `registry-v1.json`.
 - Every Pack signature verifies over the lowercase SHA-256 string.
-- The Pack ZIP itself remains byte-identical.
+- Each Pack ZIP remains byte-identical across repeated builds by the current canonical Rust encoder.
+
+The pre-release Swift encoder and the Rust encoder use different valid ZIP compression/metadata encodings, so their archive bytes are not compared directly. No public Registry version was released with the Swift encoder. File paths, uncompressed contents, validation results, Catalog semantics and signature verification are the migration parity boundary; the Rust encoder is canonical from V0.1 onward.
 
 The publication workflow never exposes the production private key to pull requests. It receives the raw Ed25519 key only from a protected GitHub Actions secret and deletes the temporary key file when the build exits.

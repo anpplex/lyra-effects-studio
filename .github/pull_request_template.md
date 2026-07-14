@@ -4,8 +4,10 @@ Describe the focused change and the user-visible or protocol impact.
 
 ## Verification
 
-- [ ] `swift test`
-- [ ] `swift build -c release`
+- [ ] `cargo fmt --check`
+- [ ] `cargo clippy --workspace --all-targets -- -D warnings`
+- [ ] `cargo test --workspace`
+- [ ] `cargo build --workspace --release`
 - [ ] Pack/Registry validation relevant to this change
 - [ ] Reproducibility check when publication output changes
 

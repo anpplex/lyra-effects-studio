@@ -4,7 +4,7 @@ Thank you for improving Lyra Effects Studio.
 
 1. Open an issue for protocol or product-level changes.
 2. Create a focused branch and include tests with code changes.
-3. Run `swift test` and `swift build -c release` before opening a pull request.
+3. Run `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo build --workspace --release` before opening a pull request.
 4. Preserve upstream licenses and notices for every Theme Pack contribution.
 
 Theme Pack pull requests must also provide:
