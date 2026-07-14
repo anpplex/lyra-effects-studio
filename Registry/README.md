@@ -13,8 +13,8 @@ Run the gates locally:
 
 ```sh
 bash Scripts/import-lyra-themes.sh --check
-swift run lyra-effects license-audit Registry
-for pack in Registry/Packs/*; do swift run lyra-effects validate "$pack"; done
+cargo run -p lyra-effects -- license-audit Registry
+for pack in Registry/Packs/*; do cargo run -p lyra-effects -- validate "$pack"; done
 ```
 
 `license-audit.json` is the machine-readable source of truth. Generated archives and the GitHub Pages site are not committed here.

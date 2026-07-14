@@ -1,12 +1,12 @@
 # Lyra Effects Studio
 
-Lyra Effects Studio is a native macOS editor, previewer, device debugger, and signed Theme Registry toolchain for [Lyra](https://github.com/anpplex/Lyra) lyric effects.
+Lyra Effects Studio is a cross-platform editor, previewer, device debugger, and signed Theme Registry toolchain for [Lyra](https://github.com/anpplex/Lyra) lyric effects. macOS is the first desktop release target; the Rust core and CLI are designed for macOS, Windows, and Linux.
 
 The project is in active development. Its first milestone establishes the public Pack and Registry contracts before the visual editor and Android bridge are added.
 
 ## What is included
 
-- Native SwiftUI macOS application foundation.
+- Cross-platform Rust workspace shared by the CLI and upcoming Tauri 2 desktop application.
 - Open, versioned Pack, parameter, scenario, Device Profile and Registry contracts.
 - Deterministic Theme Pack builder and canonical JSON encoder.
 - Ed25519-signed static Theme Registry designed for direct consumption by the Lyra APK.
@@ -15,27 +15,27 @@ The project is in active development. Its first milestone establishes the public
 
 ## Requirements
 
-- macOS 14 or later
-- Xcode 26 or a compatible Swift 6.2 toolchain
+- Rust 1.97 through `rustup` (the repository pins the exact toolchain)
+- Xcode Command Line Tools on macOS; the platform linker/build tools on Windows or Linux
 
 ## Build
 
 ```sh
-swift test
-swift build --product LyraEffectsStudio
-swift run lyra-effects --version
+cargo test --workspace
+cargo build --workspace --release
+cargo run -p lyra-effects -- --version
 ```
 
 ## CLI
 
 ```sh
-swift run lyra-effects validate Fixtures/Packs/valid-theme
-swift run lyra-effects pack Fixtures/Packs/valid-theme /tmp/sample.lyra-pack.zip
-swift run lyra-effects registry verify \
+cargo run -p lyra-effects -- validate Fixtures/Packs/valid-theme
+cargo run -p lyra-effects -- pack Fixtures/Packs/valid-theme /tmp/sample.lyra-pack.zip
+cargo run -p lyra-effects -- registry verify \
   Fixtures/Registry/registry-v1.json \
   Fixtures/Registry/registry-v1.sig \
   Fixtures/Registry/public-key.txt
-swift run lyra-effects license-audit Registry
+cargo run -p lyra-effects -- license-audit Registry
 ```
 
 Every workflow command emits canonical JSON and returns a non-zero exit code for usage, validation, or trust failures.
@@ -56,7 +56,7 @@ For a local non-production build:
 export LYRA_REGISTRY_PRIVATE_KEY_BASE64="$(openssl rand -base64 32 | tr -d '\n')"
 export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
 bash Scripts/build-registry.sh /tmp/lyra-registry
-swift run lyra-effects registry verify-site /tmp/lyra-registry
+cargo run -p lyra-effects -- registry verify-site /tmp/lyra-registry
 ```
 
 See [Registry/README.md](Registry/README.md) for contribution evidence and [docs/security/reproducibility.md](docs/security/reproducibility.md) for the signed reproducibility model.
