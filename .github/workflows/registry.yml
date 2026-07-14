@@ -1,0 +1,45 @@
+name: Publish Theme Registry
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Test trust and source gates
+        run: |
+          swift test
+          swift run lyra-effects license-audit Registry
+      - name: Build signed Registry
+        env:
+          LYRA_REGISTRY_PRIVATE_KEY_BASE64: ${{ secrets.LYRA_REGISTRY_PRIVATE_KEY_BASE64 }}
+          LYRA_REGISTRY_KEY_ID: ${{ vars.LYRA_REGISTRY_KEY_ID || 'lyra-official-v1' }}
+        run: bash Scripts/build-registry.sh .build/registry-site
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: .build/registry-site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Toolchain
+        run: swift --version
+      - name: Test
+        run: swift test
+      - name: Release build
+        run: swift build -c release
+      - name: Validate Registry sources
+        run: |
+          swift run lyra-effects license-audit Registry
+          for pack in Registry/Packs/*; do
+            swift run lyra-effects validate "$pack"
+          done
+      - name: Validate JSON files
+        run: find Registry Schemas Fixtures -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null
+      - name: Verify reproducible Registry
+        run: bash Scripts/verify-reproducible.sh

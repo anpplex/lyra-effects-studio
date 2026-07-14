@@ -11,6 +11,8 @@ enum RegistryCommand {
         switch operation {
         case "build": return try build(Array(arguments.dropFirst()))
         case "verify": return try verify(Array(arguments.dropFirst()))
+        case "verify-site": return try verifySite(Array(arguments.dropFirst()))
+        case "sign-checksum": return try signChecksum(Array(arguments.dropFirst()))
         default: throw CLIError.usage("Usage: lyra-effects registry <build|verify> ...")
         }
     }
@@ -26,11 +28,7 @@ enum RegistryCommand {
         catalog.packs.sort { ($0.id, $0.version) < ($1.id, $1.version) }
         try validateCatalogPacks(catalog.packs)
 
-        let keyText = try String(contentsOf: keyURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let keyData = Data(base64Encoded: keyText),
-              let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: keyData) else {
-            throw CLIError.invalidData("Private key must be a base64-encoded Ed25519 raw key")
-        }
+        let privateKey = try loadPrivateKey(at: keyURL)
         let signer = RegistrySigner(privateKey: privateKey)
         let signature = try signer.sign(catalog)
 
@@ -55,6 +53,61 @@ enum RegistryCommand {
         let valid = try RegistryVerifier(publicKeyBase64: publicKey).verify(catalog, signatureBase64: signature)
         let data = JSONValue.object(["valid": .bool(valid), "packCount": .number(Double(catalog.packs.count))])
         return valid ? .success(command: "registry verify", data: data) : .failure(command: "registry verify", message: "Registry signature is invalid", data: data)
+    }
+
+    private static func signChecksum(_ arguments: [String]) throws -> CLICommandResult {
+        guard arguments.count == 2 else {
+            throw CLIError.usage("Usage: lyra-effects registry sign-checksum <lowercase-sha256> <private-key-file>")
+        }
+        let checksum = arguments[0]
+        guard checksum.wholeMatch(of: /[a-f0-9]{64}/) != nil else {
+            throw CLIError.invalidData("Checksum must be 64 lowercase hexadecimal characters")
+        }
+        let signer = RegistrySigner(privateKey: try loadPrivateKey(at: URL(filePath: arguments[1])))
+        return .success(command: "registry sign-checksum", data: .object([
+            "signature": .string(try signer.signPackChecksum(checksum)),
+            "publicKey": .string(signer.publicKeyBase64),
+        ]))
+    }
+
+    private static func verifySite(_ arguments: [String]) throws -> CLICommandResult {
+        guard arguments.count == 1 else {
+            throw CLIError.usage("Usage: lyra-effects registry verify-site <registry-site-directory>")
+        }
+        let root = URL(filePath: arguments[0]).standardizedFileURL
+        let catalog = try CanonicalJSON.decode(RegistryCatalog.self, from: Data(contentsOf: root.appending(path: "registry-v1.json")))
+        try validateCatalogPacks(catalog.packs)
+        let signature = try String(contentsOf: root.appending(path: "registry-v1.sig"), encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        let publicKey = try String(contentsOf: root.appending(path: "public-key.txt"), encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        let verifier = try RegistryVerifier(publicKeyBase64: publicKey)
+        guard try verifier.verify(catalog, signatureBase64: signature) else {
+            return .failure(command: "registry verify-site", message: "Registry signature is invalid")
+        }
+
+        for pack in catalog.packs {
+            let archive = root.appending(path: pack.downloadURL).standardizedFileURL
+            guard archive.path.hasPrefix(root.path + "/"),
+                  verifier.verifyPack(
+                    data: try Data(contentsOf: archive),
+                    expectedSHA256: pack.sha256,
+                    signatureBase64: pack.signature
+                  ) else {
+                return .failure(command: "registry verify-site", message: "Pack verification failed: \(pack.id)@\(pack.version)")
+            }
+        }
+        return .success(command: "registry verify-site", data: .object([
+            "valid": .bool(true),
+            "packCount": .number(Double(catalog.packs.count)),
+        ]))
+    }
+
+    private static func loadPrivateKey(at url: URL) throws -> Curve25519.Signing.PrivateKey {
+        let keyText = try String(contentsOf: url, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let keyData = Data(base64Encoded: keyText),
+              let privateKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: keyData) else {
+            throw CLIError.invalidData("Private key must be a base64-encoded Ed25519 raw key")
+        }
+        return privateKey
     }
 
     private static func validateCatalogPacks(_ packs: [RegistryPack]) throws {

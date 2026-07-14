@@ -60,6 +60,27 @@ struct CLITests {
         #expect(result.code == 0)
         #expect(FileManager.default.fileExists(atPath: output.appending(path: "registry-v1.sig").path))
         #expect(FileManager.default.fileExists(atPath: output.appending(path: "public-key.txt").path))
+        #expect(run(["registry", "verify-site", output.path]).code == 0)
+    }
+
+    @Test func signsPackChecksumsForPublication() throws {
+        let output = FileManager.default.temporaryDirectory.appending(path: "cli-sign-\(UUID().uuidString)")
+        let keyURL = output.appending(path: "test-private-key.txt")
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: output) }
+        let key = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(repeating: 5, count: 32))
+        try key.rawRepresentation.base64EncodedString().write(to: keyURL, atomically: true, encoding: .utf8)
+        let checksum = String(repeating: "a", count: 64)
+
+        let result = run(["registry", "sign-checksum", checksum, keyURL.path])
+        let response = try CanonicalJSON.decode(JSONValue.self, from: Data(result.output.joined().utf8))
+        guard case let .string(signature)? = response["data"]?["signature"] else {
+            Issue.record("CLI response has no signature")
+            return
+        }
+
+        #expect(result.code == 0)
+        #expect(key.publicKey.isValidSignature(Data(base64Encoded: signature)!, for: Data(checksum.utf8)))
     }
 
     @Test func reportsUsageErrorsAsJSON() throws {
