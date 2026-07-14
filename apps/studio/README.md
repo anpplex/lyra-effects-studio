@@ -1,32 +1,19 @@
-# React + TypeScript + Vite
+# Studio frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The React/Vite frontend is the cross-platform presentation layer embedded by Tauri. It currently provides:
 
-Currently, two official plugins are available:
+- a searchable Pack and Theme library;
+- a true-ratio Avatr 4032 × 284 preview with day/night scenarios;
+- exact and slider-based theme parameter controls;
+- generated minimal CSS parameter patches;
+- preview events, diagnostics and theme metadata panels.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The UI state model lives in `src/studio/model.ts` so project and preview behavior can be tested without a desktop window. Filesystem access, signing and packaging remain in Rust and are exposed to this layer through typed Tauri commands.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm ci
+npm run lint
+npm test
+npm run build
+npm run dev
 ```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
