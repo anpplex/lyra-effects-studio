@@ -1,0 +1,14 @@
+{
+  "name": "lyra-effects-studio",
+  "private": true,
+  "scripts": {
+    "studio:build": "npm --prefix apps/studio run build",
+    "studio:dev": "npm --prefix apps/studio run dev",
+    "studio:lint": "npm --prefix apps/studio run lint",
+    "studio:test": "npm --prefix apps/studio run test",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}

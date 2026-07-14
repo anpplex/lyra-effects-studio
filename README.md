@@ -26,6 +26,17 @@ cargo build --workspace --release
 cargo run -p lyra-effects -- --version
 ```
 
+The Tauri shell is now buildable while the three-column Studio UI is under active development:
+
+```sh
+npm ci
+npm ci --prefix apps/studio
+npm run studio:lint
+npm run studio:test
+npm run studio:build
+npx tauri build --debug --no-bundle
+```
+
 ## CLI
 
 ```sh
