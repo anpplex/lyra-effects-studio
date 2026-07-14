@@ -1,5 +1,7 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import "./App.css";
+import { backend, isTauriRuntime, type ProjectSnapshot } from "./lib/backend";
 import {
   createStudioState,
   selectPack,
@@ -7,8 +9,16 @@ import {
   setPreviewMode,
   updateParameter,
   type InspectorTab,
+  type PackSummary,
   type StudioParameters,
 } from "./studio/model";
+import {
+  applySaveResult,
+  createProjectSession,
+  editProjectSource,
+  selectProjectPack,
+  type ProjectSession,
+} from "./studio/projectSession";
 
 type NumericParameter = Exclude<keyof StudioParameters, "showSafeArea">;
 
@@ -78,10 +88,27 @@ function ParameterSlider({
   );
 }
 
+function studioPacksFromProject(project: ProjectSnapshot): PackSummary[] {
+  const families = new Map<string, PackSummary>();
+  for (const pack of project.packs) {
+    const family = families.get(pack.family) ?? {
+      id: pack.family,
+      name: pack.family.split("-").map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join(" "),
+      description: "Local editable project",
+      themes: [],
+    };
+    family.themes.push({ id: pack.id, name: pack.name, version: pack.version, status: "ready" });
+    families.set(pack.family, family);
+  }
+  return [...families.values()];
+}
+
 function App() {
   const [state, setState] = useState(createStudioState);
   const [search, setSearch] = useState("");
   const [consoleTab, setConsoleTab] = useState<"timeline" | "events" | "diagnostics">("events");
+  const [projectSession, setProjectSession] = useState<ProjectSession>();
+  const [projectError, setProjectError] = useState<string>();
 
   const selectedPack = state.packs.find((pack) => pack.id === state.selectedPackId)!;
   const selectedTheme = selectedPack.themes.find((theme) => theme.id === state.selectedThemeId)!;
@@ -98,6 +125,62 @@ function App() {
     setState((current) => updateParameter(current, key, value));
   };
 
+  const saveProject = useCallback(async () => {
+    if (!projectSession?.dirty || projectSession.status === "saving") return;
+    const request = {
+      packRoot: projectSession.activePack.root,
+      expectedSha256: projectSession.expectedSha256,
+      source: projectSession.draftSource,
+    };
+    setProjectSession((current) => current ? { ...current, status: "saving", message: "Saving…" } : current);
+    try {
+      const result = await backend.saveStyle(request);
+      setProjectSession((current) => current ? applySaveResult(current, result) : current);
+    } catch (error) {
+      setProjectSession((current) => current ? { ...current, status: "error", message: error instanceof Error ? error.message : String(error) } : current);
+    }
+  }, [projectSession]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "s") {
+        event.preventDefault();
+        void saveProject();
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [saveProject]);
+
+  const openProject = async () => {
+    setProjectError(undefined);
+    try {
+      const chosen = isTauriRuntime()
+        ? await openDialog({ directory: true, multiple: false, title: "Open Lyra Theme Project" })
+        : "/browser-fixture/future-lyrics";
+      if (typeof chosen !== "string") return;
+      const project = await backend.openProject(chosen);
+      const session = createProjectSession(project);
+      const packs = studioPacksFromProject(project);
+      const firstPack = packs[0];
+      const firstTheme = firstPack?.themes[0];
+      if (!firstPack || !firstTheme) throw new Error("The project does not contain an editable Theme Pack");
+      setProjectSession(session);
+      setState((current) => ({ ...current, packs, selectedPackId: firstPack.id, selectedThemeId: firstTheme.id, inspectorTab: "source" }));
+    } catch (error) {
+      setProjectError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const chooseTheme = (themeId: string) => {
+    if (projectSession?.dirty && themeId !== projectSession.activePack.id) {
+      setProjectSession({ ...projectSession, status: "error", message: "Save or discard changes before switching Packs." });
+      return;
+    }
+    setState((current) => selectTheme(current, themeId));
+    setProjectSession((current) => current ? selectProjectPack(current, themeId) : current);
+  };
+
   const previewStyle = {
     "--lyric-size": `${state.parameters.fontSize}px`,
     "--lyric-glow": `${state.parameters.glow / 10}px`,
@@ -110,7 +193,7 @@ function App() {
       <header className="app-bar" data-tauri-drag-region>
         <div className="brand-block">
           <div className="brand-mark" aria-hidden="true"><span /><span /><span /></div>
-          <div><strong>Lyra Effects Studio</strong><span>future-lyrics / {selectedTheme.name}</span></div>
+          <div><strong>Lyra Effects Studio{projectSession?.dirty && <i className="dirty-mark" title="Unsaved changes" />}</strong><span>{projectSession ? projectSession.project.root.split(/[\\/]/).at(-1) : "future-lyrics"} / {selectedTheme.name}</span></div>
         </div>
         <div className="app-toolbar">
           <label className="select-control"><span className="sr-only">Device profile</span><select defaultValue="avatr-cluster-4032x284"><option value="avatr-cluster-4032x284">Avatr Cluster · 4032 × 284</option><option value="browser-responsive">Responsive browser</option></select></label>
@@ -118,6 +201,7 @@ function App() {
             <button data-testid="mode-day" className={state.preview.mode === "day" ? "active" : ""} aria-pressed={state.preview.mode === "day"} onClick={() => setState((current) => setPreviewMode(current, "day"))}><Icon name="sun" />Day</button>
             <button data-testid="mode-night" className={state.preview.mode === "night" ? "active" : ""} aria-pressed={state.preview.mode === "night"} onClick={() => setState((current) => setPreviewMode(current, "night"))}><Icon name="moon" />Night</button>
           </div>
+          {projectSession && <button className="quiet-button save-command" data-testid="save-project" disabled={!projectSession.dirty || projectSession.status === "saving"} onClick={() => void saveProject()}>{projectSession.status === "saving" ? "Saving…" : "Save"}</button>}
           <button className="icon-button" aria-label="Refresh preview"><Icon name="refresh" /></button>
           <button className="play-button" data-testid="play-toggle" onClick={() => setState((current) => ({ ...current, preview: { ...current.preview, playing: !current.preview.playing } }))}><Icon name={state.preview.playing ? "pause" : "play"} />{state.preview.playing ? "Pause" : "Play"}</button>
         </div>
@@ -126,21 +210,21 @@ function App() {
 
       <div className="workspace">
         <aside className="library-panel">
-          <div className="panel-heading"><span>Library</span><button className="icon-button small" aria-label="Open project"><Icon name="folder" /></button></div>
+          <div className="panel-heading"><span>Library</span><button className="icon-button small" data-testid="open-project" aria-label="Open project" onClick={() => void openProject()}><Icon name="folder" /></button></div>
           <label className="search-control"><Icon name="search" /><span className="sr-only">Search themes</span><input value={search} onChange={(event) => setSearch(event.currentTarget.value)} placeholder="Search themes" /></label>
           <nav className="pack-tree" aria-label="Theme library">
             {visiblePacks.map((pack) => (
               <section className="pack-group" key={pack.id}>
-                <button className={`pack-row ${pack.id === state.selectedPackId ? "selected" : ""}`} onClick={() => setState((current) => selectPack(current, pack.id))}><Icon name="chevron" size={13} /><span className="pack-icon"><Icon name="layers" size={14} /></span><span><strong>{pack.name}</strong><small>{pack.themes.length} themes</small></span></button>
+                <button className={`pack-row ${pack.id === state.selectedPackId ? "selected" : ""}`} onClick={() => projectSession ? chooseTheme(pack.themes[0]?.id ?? "") : setState((current) => selectPack(current, pack.id))}><Icon name="chevron" size={13} /><span className="pack-icon"><Icon name="layers" size={14} /></span><span><strong>{pack.name}</strong><small>{pack.themes.length} themes</small></span></button>
                 <div className="theme-list">
                   {pack.themes.map((theme) => (
-                    <button key={theme.id} data-testid={`theme-${theme.id}`} className={theme.id === state.selectedThemeId ? "active" : ""} onClick={() => setState((current) => selectTheme(current, theme.id))}><span className={`theme-swatch swatch-${theme.id}`} /><span><strong>{theme.name}</strong><small>v{theme.version}</small></span>{theme.status === "draft" && <em>Draft</em>}</button>
+                    <button key={theme.id} data-testid={`theme-${theme.id}`} className={theme.id === state.selectedThemeId ? "active" : ""} onClick={() => chooseTheme(theme.id)}><span className={`theme-swatch swatch-${theme.id}`} /><span><strong>{theme.name}</strong><small>v{theme.version}</small></span>{theme.status === "draft" && <em>Draft</em>}</button>
                   ))}
                 </div>
               </section>
             ))}
           </nav>
-          <div className="library-footer"><span><Icon name="cloud" />GitHub Registry</span><strong>3 packs · synced</strong></div>
+          <div className="library-footer"><span><Icon name={projectSession ? "folder" : "cloud"} />{projectSession ? "Local project" : "GitHub Registry"}</span><strong>{projectSession ? `${projectSession.project.packs.length} packs · ${projectSession.project.mode}` : "3 packs · synced"}</strong></div>
         </aside>
 
         <section className="stage-panel">
@@ -182,12 +266,17 @@ function App() {
             <section className="inspector-section"><div className="section-title"><span>Guides</span><Icon name="chevron" size={13} /></div><label className="switch-row"><span><strong>Safe area</strong><small>Show protected rendering bounds</small></span><input data-testid="safe-area-toggle" type="checkbox" checked={state.parameters.showSafeArea} onChange={(event) => { const checked = event.currentTarget.checked; setState((current) => updateParameter(current, "showSafeArea", checked)); }} /><i /></label></section>
             <section className="inspector-section compact"><div className="section-title"><span>Theme metadata</span><Icon name="chevron" size={13} /></div><dl className="metadata"><div><dt>Contract</dt><dd>lyra.pack/v1</dd></div><div><dt>Theme</dt><dd>{selectedTheme.id}</dd></div><div><dt>Version</dt><dd>{selectedTheme.version}</dd></div><div><dt>License</dt><dd>MIT</dd></div></dl></section>
           </div>}
-          {state.inspectorTab === "source" && <div className="source-panel"><div className="source-path">themes/{selectedTheme.id}/theme.css</div><pre><code><span className="code-comment">{`/* Generated parameter patch */`}</span>{`\n:root {\n  --lyra-font-size: `}<b>{state.parameters.fontSize}px</b>{`;\n  --lyra-right-zone: `}<b>{state.parameters.rightZone}%</b>{`;\n  --lyra-glow: `}<b>{state.parameters.glow}%</b>{`;\n  --lyra-motion: `}<b>{state.parameters.motion}s</b>{`;\n}`}</code></pre><div className="source-note"><Icon name="info" /><span>Only changed variables are written. Formatting and unknown fields stay intact.</span></div></div>}
+          {state.inspectorTab === "source" && <div className="source-panel">
+            <div className="source-path"><span>{projectSession ? projectSession.activePack.stylePath : `themes/${selectedTheme.id}/theme.css`}</span>{projectSession && <button data-testid="source-save" disabled={!projectSession.dirty || projectSession.status === "saving"} onClick={() => void saveProject()}>{projectSession.status === "saving" ? "Saving…" : "Save"}</button>}</div>
+            {projectSession ? <textarea data-testid="source-editor" aria-label="Theme CSS source" spellCheck={false} value={projectSession.draftSource} onChange={(event) => { const source = event.currentTarget.value; setProjectSession((current) => current ? editProjectSource(current, source) : current); }} /> : <pre><code><span className="code-comment">{`/* Generated parameter patch */`}</span>{`\n:root {\n  --lyra-font-size: `}<b>{state.parameters.fontSize}px</b>{`;\n  --lyra-right-zone: `}<b>{state.parameters.rightZone}%</b>{`;\n  --lyra-glow: `}<b>{state.parameters.glow}%</b>{`;\n  --lyra-motion: `}<b>{state.parameters.motion}s</b>{`;\n}`}</code></pre>}
+            {(projectSession?.message || projectError) && <div className={`project-message ${projectSession?.status === "conflict" || projectSession?.status === "error" || projectError ? "error" : ""}`} data-testid="project-message"><Icon name={projectSession?.status === "conflict" || projectSession?.status === "error" || projectError ? "warning" : "info"} /><span>{projectError ?? projectSession?.message}</span></div>}
+            <div className="source-note"><Icon name="info" /><span>{projectSession ? "Writes are atomic and protected by a source hash. External changes are never overwritten silently." : "Only changed variables are written. Formatting and unknown fields stay intact."}</span></div>
+          </div>}
           {state.inspectorTab === "diagnostics" && <div className="issues-panel"><div className="issue-summary"><strong data-testid="diagnostic-error-count">{errorCount}</strong><span>errors</span><strong>{state.diagnostics.filter((item) => item.level === "warning").length}</strong><span>warnings</span></div>{state.diagnostics.filter((item) => item.level !== "info").map((item) => <article className={`issue-card ${item.level}`} key={item.id}><Icon name="warning" /><div><strong>{item.message}</strong><p>Preview-only advisory. Pack validation remains green.</p></div></article>)}</div>}
         </aside>
       </div>
 
-      <footer className="status-bar"><span><i className="status-dot" />Ready</span><span>Pack contract v1</span><span>Project contract v1</span><span className="status-grow" /><span>UTF-8</span><span>Spaces: 2</span><span>Lyra Studio 0.1.0-alpha.1</span></footer>
+      <footer className="status-bar"><span><i className={`status-dot ${projectSession?.dirty ? "dirty" : ""}`} />{projectSession?.dirty ? "Unsaved changes" : projectSession?.status === "saved" ? "Saved" : "Ready"}</span><span>Pack contract v1</span><span>Project contract v1</span><span className="status-grow" /><span>UTF-8</span><span>Spaces: 2</span><span>Lyra Studio 0.1.0-alpha.1</span></footer>
     </main>
   );
 }

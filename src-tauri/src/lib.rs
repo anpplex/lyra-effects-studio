@@ -1,5 +1,7 @@
 use serde::Serialize;
 
+mod project;
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AppInfo {
@@ -30,7 +32,12 @@ fn app_info() -> AppInfo {
 /// Panics when Tauri cannot create or run the application event loop.
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            project::open_project,
+            project::save_project_style
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Lyra Effects Studio");
 }
