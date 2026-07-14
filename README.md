@@ -2,11 +2,12 @@
 
 Lyra Effects Studio is a cross-platform editor, previewer, device debugger, and signed Theme Registry toolchain for [Lyra](https://github.com/anpplex/Lyra) lyric effects. macOS is the first desktop release target; the Rust core and CLI are designed for macOS, Windows, and Linux.
 
-The project is in active development. Its first milestone establishes the public Pack and Registry contracts before the visual editor and Android bridge are added.
+The project is in active development. The public Pack and Registry contracts, Rust CLI, Tauri shell and first interactive Studio workspace are available; real project persistence and the Android bridge are the next milestones.
 
 ## What is included
 
-- Cross-platform Rust workspace shared by the CLI and upcoming Tauri 2 desktop application.
+- Cross-platform Rust workspace shared by the CLI and Tauri 2 desktop application.
+- Three-column Studio workspace with theme navigation, a true-ratio 4032 × 284 preview, exact parameter tuning, generated CSS patches and diagnostics.
 - Open, versioned Pack, parameter, scenario, Device Profile and Registry contracts.
 - Deterministic Theme Pack builder and canonical JSON encoder.
 - Ed25519-signed static Theme Registry designed for direct consumption by the Lyra APK.
@@ -26,7 +27,7 @@ cargo build --workspace --release
 cargo run -p lyra-effects -- --version
 ```
 
-The Tauri shell is now buildable while the three-column Studio UI is under active development:
+Build and test the React workspace and Tauri application:
 
 ```sh
 npm ci
@@ -36,6 +37,8 @@ npm run studio:test
 npm run studio:build
 npx tauri build --debug --no-bundle
 ```
+
+For browser-based UI development, run `npm run studio:dev`. The current workspace uses bundled fixture state while the filesystem command layer is being connected.
 
 ## CLI
 
