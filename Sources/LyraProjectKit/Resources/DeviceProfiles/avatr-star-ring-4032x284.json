@@ -1,0 +1,22 @@
+{
+  "adb": {
+    "externalPackRoot": "/storage/emulated/{userId}/Android/data/{packageId}/files/lyric-effects",
+    "packageId": "com.lyra.cluster",
+    "userId": 12
+  },
+  "canvas": {
+    "cssHeight": 284,
+    "cssWidth": 4032,
+    "physicalHeight": 284,
+    "physicalWidth": 4032,
+    "rotation": 0
+  },
+  "capabilities": ["devBridge", "fallbackPush", "metrics"],
+  "id": "com.avatr.cluster.4032x284",
+  "masks": [
+    { "height": 284, "id": "left-gauge", "shape": "rect", "width": 1880, "x": 0, "y": 0 }
+  ],
+  "name": "Avatr Cluster 4032×284",
+  "safeArea": { "bottom": 12, "left": 64, "right": 64, "top": 12 },
+  "schemaVersion": 1
+}

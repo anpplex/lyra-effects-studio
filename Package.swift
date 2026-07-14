@@ -29,7 +29,11 @@ let package = Package(
         ),
         .target(name: "LyraPackKit"),
         .target(name: "LyraRegistryKit", dependencies: ["LyraPackKit"]),
-        .target(name: "LyraProjectKit", dependencies: ["LyraPackKit"]),
+        .target(
+            name: "LyraProjectKit",
+            dependencies: ["LyraPackKit"],
+            resources: [.process("Resources")]
+        ),
         .testTarget(name: "LyraEffectsCLITests", dependencies: ["LyraEffectsCLI"]),
         .testTarget(name: "LyraPackKitTests", dependencies: ["LyraPackKit"]),
         .testTarget(name: "LyraRegistryKitTests", dependencies: ["LyraRegistryKit"]),

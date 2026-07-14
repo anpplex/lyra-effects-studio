@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lyra Parameter Schema v1",
+  "type": "object",
+  "required": ["schemaVersion", "groups"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "groups": { "type": "array" }
+  }
+}

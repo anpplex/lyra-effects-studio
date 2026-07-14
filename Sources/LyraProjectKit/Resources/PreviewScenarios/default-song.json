@@ -1,0 +1,19 @@
+{
+  "events": [
+    { "atMilliseconds": 0, "type": "play" },
+    { "atMilliseconds": 8000, "type": "pause" }
+  ],
+  "expectedDiagnostics": [],
+  "id": "org.lyra.scenario.default-song",
+  "lyrics": [
+    { "endMilliseconds": 4000, "startMilliseconds": 0, "text": "Across the stars" },
+    { "endMilliseconds": 8000, "startMilliseconds": 4000, "text": "the music finds us", "translation": "音乐与我们相遇" }
+  ],
+  "schemaVersion": 1,
+  "track": {
+    "album": "Preview Fixtures",
+    "artist": "Lyra Contributors",
+    "artwork": "artwork/default.png",
+    "title": "Lyra Sample"
+  }
+}
