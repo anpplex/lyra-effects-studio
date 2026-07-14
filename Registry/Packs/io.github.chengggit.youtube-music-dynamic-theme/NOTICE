@@ -1,0 +1,6 @@
+Dynamic Background theme, adapted for the Lyra remote display.
+
+The CSS in theme/lyra.css was copied byte-for-byte from Lyra's audited
+adaptation. Upstream source and immutable revision evidence are recorded in
+upstream.json. The upstream work is Copyright (c) 2025 chengg and licensed
+under the MIT License.

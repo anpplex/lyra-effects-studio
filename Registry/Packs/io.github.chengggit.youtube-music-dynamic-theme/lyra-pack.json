@@ -1,0 +1,17 @@
+{
+  "author": { "name": "chengggit", "url": "https://github.com/chengggit" },
+  "capabilities": ["styles"],
+  "compatibility": {
+    "bridgeApi": ">=1.0.0 <2.0.0",
+    "packSchema": ">=1 <2",
+    "runtimeApi": ">=1.0.0 <2.0.0"
+  },
+  "entry": { "style": "theme/lyra.css" },
+  "family": "better-lyrics",
+  "id": "io.github.chengggit.youtube-music-dynamic-theme",
+  "kind": "theme",
+  "license": { "notice": "NOTICE", "spdx": "MIT" },
+  "name": "Dynamic Background",
+  "schemaVersion": 1,
+  "version": "3.2.2"
+}

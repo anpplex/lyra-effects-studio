@@ -1,0 +1,17 @@
+{
+  "author": { "name": "Better Lyrics", "url": "https://github.com/better-lyrics" },
+  "capabilities": ["styles"],
+  "compatibility": {
+    "bridgeApi": ">=1.0.0 <2.0.0",
+    "packSchema": ">=1 <2",
+    "runtimeApi": ">=1.0.0 <2.0.0"
+  },
+  "entry": { "style": "theme/lyra.css" },
+  "family": "better-lyrics",
+  "id": "io.github.better-lyrics.theme-sustain",
+  "kind": "theme",
+  "license": { "notice": "NOTICE", "spdx": "MIT" },
+  "name": "Sustain",
+  "schemaVersion": 1,
+  "version": "1.0.12"
+}

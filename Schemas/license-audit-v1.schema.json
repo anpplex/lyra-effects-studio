@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Lyra Theme License Audit v1",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "sourceCatalogPath", "sourceRevision", "included", "excluded"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "included": { "type": "array" },
+    "excluded": { "type": "array" }
+  }
+}

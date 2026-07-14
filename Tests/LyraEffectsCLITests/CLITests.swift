@@ -70,6 +70,14 @@ struct CLITests {
         #expect(json["ok"] == .bool(false))
     }
 
+    @Test func auditsRegistryLicenses() {
+        let result = run(["license-audit", packageRoot().appending(path: "Registry").path])
+
+        #expect(result.code == 0)
+        #expect(result.output.joined().contains(#""includedCount":3"#))
+        #expect(result.output.joined().contains(#""excludedCount":15"#))
+    }
+
     private func run(_ arguments: [String]) -> (code: Int32, output: [String]) {
         var output: [String] = []
         let code = CLI.run(arguments: arguments, write: { output.append($0) })

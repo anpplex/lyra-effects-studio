@@ -1,0 +1,382 @@
+/* Lyra-adapted marketplace theme: dynamic-background */
+
+/* Dead YTM chrome stripped; wrappers → .lyra-blyrics-stage / #blyrics-wrapper */
+
+0.8 = 80px blur). Help: See inline comments for usage or GitHub for the full README. ============================================================ */ /* --- default | light | dark --- */ /* --- Background & Backdrop --- */ /* --- Typography & Colors --- */ /* --- Lyrics --- */ /* --- UI Components --- */ /* --- Features & Toggles --- */ /* --- Roundness --- */ /* --- Animation --- */ /* ==================================================== */ :root {
+  --bg-blur: calc(0.6 * 100px);
+  --bg-brightness: 0.7;
+  --ui-color: transparent;
+  --ui-contrast: rgba(255, 255, 255, 0.1);
+  --ui-highlight: rgba(255, 255, 255, 0.1);
+  --btn-color: rgba(255, 255, 255, 0.1);
+  --btn-highlight: rgba(255, 255, 255, 0.2);
+  --album-art-size: 400px;
+  --bg-scale: 1.2;
+  --bg-saturate: 1.5;
+  --bg-player-opacity: 0.8;
+  --text-primary: white;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --icon: white;
+  --accent: white;
+  --accent-icon: white;
+  --accent-highlight: #ffffff;
+  --ui-blur: 10px;
+  --ui-border: transparent;
+  --btn-border: transparent;
+  --ui-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  --radius-art: 8px;
+  --radius-art-md: 16px;
+  --radius-art-lg: 20px;
+  --radius-btn: 12px;
+  --radius-btn-alt: 16px;
+  --radius-highlight: 8px;
+  --radius-highlight-lg: 12px;
+  --radius-panel-lg: 24px;
+  --radius-panel: 12px;
+  --anim-bg-duration: 0.3s;
+  --anim-bg-timing: ease-in-out;
+  --anim-player-page-duration: 0.65s;
+  --anim-player-page-timing: cubic-bezier(0.3, 0.6, 0.5, 1);
+  --anim-fade-duration: 0.3s;
+  --anim-fade-duration-alt: 0.5s;
+  --anim-fade-timing: ease;
+  --anim-drawer-duration: 0.3s;
+  --anim-drawer-timing: ease;
+  --anim-no-lyrics-slide-delay: 1.8s;
+  --anim-no-lyrics-duration: 0.3s;
+  --anim-no-lyrics-timing: ease-in-out;
+  --blyrics-lyric-scroll-duration: 0.5s;
+  --blyrics-lyric-scroll-timing-function: ease-in-out;
+  --ytmusic-text-primary: white;
+  --ytmusic-overlay-text-secondary: rgba(255, 255, 255, 0.7);
+  --blyrics-font-family: "Inter","PingFangSC-Regular","Apple SD Gothic Neo";
+  --blyrics-font-weight: 600;
+  --blyrics-font-size: 40px;
+  --blyrics-footer-text-color: rgba(255, 255, 255, 0.7);
+  --blyrics-footer-font-family: "Inter","PingFangSC-Regular","Apple SD Gothic Neo";
+  --blyrics-footer-font-weight: 400;
+  --blyrics-glow-color: rgb(255,255,255);
+}
+html, .scrollable-content, .scroller, .dropdown-content {
+  scrollbar-width: none !important;
+}
+.stroke.yt-interaction, .fill.yt-interaction {
+  border: 0;
+  background: transparent;
+}
+@media (min-width: 615px) {
+:not([video-mode]):not(.lyra-blyrics-stage #player {
+  max-width: var(--album-art-size) !important;
+}
+}
+.yt-list-item-view-model__title {
+  color: var(--text-primary);
+}
+.ytSwitchShapeKnob {
+  background: rgba(255, 255, 255, 0.3);
+}
+.ytSwitchShapeKnobActive {
+  background: var(--accent);
+}
+.ytSpecButtonShapeNextCallToActionInverse.ytSpecButtonShapeNextText {
+  color: var(--accent);
+}
+.ytSpecButtonShapeNextCallToActionInverse.ytSpecButtonShapeNextText:hover {
+  background: var(--btn-highlight);
+}
+.ytSpecButtonShapeNextCallToAction.ytSpecButtonShapeNextFilled {
+  color: var(--accent);
+  background: var(--btn-color);
+  border-radius: var(--radius-btn-alt);
+}
+.ytSpecButtonShapeNextCallToAction.ytSpecButtonShapeNextFilled:hover {
+  background: var(--btn-highlight);
+}
+.scroll-button.yt-third-party-share-target-section-renderer {
+  background: var(--btn-color);
+  backdrop-filter: blur(var(--ui-blur));
+  box-shadow: none;
+}
+.scroll-button.yt-third-party-share-target-section-renderer .yt-icon-shape {
+  color: var(--icon);
+}
+@keyframes open-playerpage {
+0% {
+  transform: translateY(100%);
+  opacity: 0;
+}
+100% {
+  transform: translateY(0);
+  opacity: 1;
+}
+}
+@keyframes collapse-playerpage {
+0% {
+  transform: translateY(0);
+}
+38% {
+  opacity: 1;
+}
+100% {
+  transform: translateY(120vh);
+  opacity: 0;
+}
+}
+@keyframes mp-grow {
+0% {
+  transform: translate3d(60%, 0, 0) scale(0.2);
+  opacity: 0;
+}
+100% {
+  transform: translate3d(0, 0, 0) scale(1);
+  opacity: 1;
+}
+}
+@keyframes mp-shrink {
+0% {
+  transform: scale(1.7);
+  opacity: 0;
+}
+50% {
+  opacity: 0;
+}
+100% {
+  transform: translate3d(0, 0, 0) scale(1);
+  opacity: 1;
+}
+}
+.blyrics-footer__discord, .autoscroll-resume-button, .blyrics-footer__container {
+  transition: background var(--anim-fade-duration) var(--anim-fade-timing),
+    opacity var(--anim-fade-duration) var(--anim-fade-timing);
+}
+.autoscroll-resume-button {
+  transition: text-shadow var(--anim-fade-duration) var(--anim-fade-timing);
+}
+.ytSpecButtonShapeNextMono, .ytSpecButtonShapeNextCallToAction, .ytSpecButtonShapeNextCallToActionInverse, .ytSpecButtonShapeNextOverlay {
+  transition: background var(--anim-fade-duration) var(--anim-fade-timing);
+}
+.ytListItemViewModelTappable {
+  transition: background var(--anim-fade-duration) var(--anim-fade-timing);
+}
+.yt-simple-endpoint {
+  transition: background var(--anim-fade-duration) var(--anim-fade-timing);
+}
+#blyrics-song-info {
+  max-width: 50rem;
+  text-align: left !important;
+  margin: 0 !important;
+  padding-left: 2rem !important;
+}
+.blyrics-footer:hover {
+  opacity: 1;
+  filter: none;
+  transition: opacity var(--anim-fade-duration) var(--anim-fade-timing);
+}
+.blyrics-footer__discord, .autoscroll-resume-button, .blyrics-footer__container {
+  background: var(--btn-color);
+  border: var(--ui-border);
+  backdrop-filter: blur(var(--ui-blur));
+}
+.autoscroll-resume-button {
+  border-radius: var(--radius-btn);
+}
+.blyrics-footer__container {
+  border-radius: var(--radius-btn-alt);
+}
+.blyrics-footer__discord > img {
+  filter: brightness(1.5);
+}
+/* ========================== LYRICS ========================== */ .blyrics--line {
+  transform: scale(var(--blyrics-scale));
+  transition: transform var(--blyrics-scale-transition-duration) ease-in-out,
+  filter 0.8s ease-in-out,
+  opacity 0.6s ease;
+  filter: blur(6px);
+  opacity: 0.4;
+}
+.blyrics--line:hover {
+  filter: none !important;
+  opacity: 1 !important;
+}
+.blyrics-container[data-sync='none'] .blyrics--line {
+  opacity: 1;
+  filter: none;
+  transition: filter 0.35s ease-in-out,
+  opacity 0.2s ease;
+}
+.blyrics-container .blyrics--active ~ .blyrics--line {
+  opacity: 1;
+  filter: blur(6px);
+}
+.blyrics-container .blyrics--line.blyrics--pre-animating {
+  filter: none;
+  opacity: 1;
+}
+.blyrics--line.blyrics--active.blyrics--animating {
+  filter: none;
+  opacity: 1;
+  transform: scale(var(--blyrics-active-scale));
+  transition-delay: 0s;
+}
+.blyrics-container.blyrics-user-scrolling .blyrics--line {
+  opacity: 1;
+  filter: none;
+  transition: transform var(--blyrics-scale-transition-duration) ease-in-out,
+  filter 0.35s ease-in-out,
+  opacity 0.2s ease;
+}
+@keyframes blyrics-glow {
+0% {
+  filter: drop-shadow(0 0 1.2rem var(--blyrics-glow-color));
+}
+to {
+  filter: drop-shadow(0 0 0rem var(--blyrics-glow-color));
+}
+}
+/* ========================== TOGGLES ========================== */ #blyrics-song-info p#blyrics-title {
+  font-size: 2.5rem;
+}
+#blyrics-song-info p#blyrics-artist {
+  font-size: 2rem;
+}
+:not().lyra-blyrics-stage #player- {
+  margin: 0 !important;
+}
+:not().lyra-blyrics-stage # {
+  width: 40%;
+  min-width: unset;
+}
+/* Video Mode */ :not().lyra-blyrics-stage .content- {
+  padding: var(--ytmusic-player-page-horizontal-padding);
+}
+:not().lyra-blyrics-stage # {
+  width: 40%;
+  min-width: unset;
+}
+:not().lyra-blyrics-stage #player- {
+  max-width: 70% !important;
+  margin: 0;
+}
+.lyra-blyrics-stage {
+  max-width: 400px !important;
+  transition: none;
+}
+.lyra-blyrics-stage > [slot=''] # {
+  transform: translateY(4rem);
+}
+:root {
+  --blyrics-fullscreen-video-panel-size: 58%;
+}
+.lyra-blyrics-stage #player {
+  max-width: var(--album-art-size) !important;
+  transition: none;
+}
+.ytSpecButtonShapeNextMono.ytSpecButtonShapeNextFilled:hover {
+  background: var(--btn-highlight) !important;
+  border: var(--btn-border);
+}
+.ytSpecButtonShapeNextMono.ytSpecButtonShapeNextFilled .yt-icon-shape {
+  color: var(--accent-icon);
+}
+.ytAttributedStringWhiteSpacePreWrap {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.ytSpecButtonShapeNextOverlay.ytSpecButtonShapeNextText {
+  color: var(--text-primary);
+}
+.ytSpecButtonShapeNextOverlay.ytSpecButtonShapeNextText:hover {
+  background: var(--btn-highlight);
+}
+.ytSpecButtonShapeNextMono.ytSpecButtonShapeNextTonal:hover {
+  background: var(--btn-highlight);
+  border: var(--btn-border);
+}
+.ytSpecButtonShapeNextMono.ytSpecButtonShapeNextTonal .yt-icon-shape {
+  color: var(--accent-icon);
+}
+@media (max-width: 615px) {
+.blyrics-container:before, .blyrics-container:after {
+  opacity: 0;
+}
+}
+.ytRadioShapeLabelContainer {
+  color: var(--text-primary);
+}
+.ytDialogHeaderViewModelText {
+  color: var(--text-primary);
+}
+.ytRadioButtonItemViewModelSubText {
+  color: var(--text-secondary);
+}
+.ytListItemViewModelTappable {
+  border-radius: var(--radius-highlight-lg);
+}
+.ytListItemViewModelTappable:hover {
+  background: var(--ui-highlight);
+}
+.ytSpecButtonShapeNextCallToAction.ytSpecButtonShapeNextText {
+  color: var(--accent);
+  background: var(--btn-color);
+  border: var(--btn-border);
+}
+.ytSpecButtonShapeNextCallToAction.ytSpecButtonShapeNextText:hover {
+  background: var(--btn-highlight);
+  border: var(--btn-border);
+}
+
+/* ==== Lyra car / cluster strip shim (auto-appended) ==== */
+.lyra-blyrics-stage,
+#blyrics-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#blyrics-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.lyra-blyrics-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+.blyrics-container {
+  max-width: 100%;
+}
+body.cluster-bar .lyra-blyrics-stage,
+body.cluster-bar #blyrics-wrapper {
+  /* right stage already sized by host CSS; keep themes from exploding */
+  font-size: clamp(0.95rem, 2.2vw, 1.35rem) !important;
+}
+body.cluster-bar .blyrics--line {
+  transform-origin: center center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding-left: 0.15em !important;
+  padding-right: 0.15em !important;
+}
+body.cluster-bar .blyrics--line.blyrics--active {
+  --blyrics-active-scale: 1.06;
+  font-size: 1.15em;
+}
+body.cluster-bar .blyrics--line:not(.blyrics--active) {
+  opacity: 0.55;
+  font-size: 0.9em;
+}
+body.cluster-bar .lyra-blyrics-meta {
+  font-size: 0.7rem;
+  padding: 4px 12px;
+  opacity: 0.45;
+}
+/* Hide extension-only chrome if a theme resurrects it */
+#blyrics-ad-overlay,
+#blyrics-loader,
+.blyrics-footer,
+.blyrics-footer__container {
+  display: none !important;
+}

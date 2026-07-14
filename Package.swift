@@ -38,6 +38,7 @@ let package = Package(
         .testTarget(name: "LyraPackKitTests", dependencies: ["LyraPackKit"]),
         .testTarget(name: "LyraRegistryKitTests", dependencies: ["LyraRegistryKit"]),
         .testTarget(name: "LyraProjectKitTests", dependencies: ["LyraProjectKit"]),
+        .testTarget(name: "RegistrySourceTests", dependencies: ["LyraPackKit", "LyraRegistryKit"]),
     ],
     swiftLanguageModes: [.v6]
 )

@@ -1,0 +1,102 @@
+/* Lyra-adapted marketplace theme: modern-player */
+
+/* Dead YTM chrome stripped; wrappers → .lyra-blyrics-stage / #blyrics-wrapper */
+
+.blyrics-container {
+    overflow-y: auto !important;
+    scroll-behavior: smooth !important;
+    padding: 10px !important;
+}
+.blyrics-container:has(.blyrics--active):not(.blyrics-user-scrolling) > div:not(.blyrics--active):not(.blyrics--active ~ div) {
+    opacity: 0.33 !important;
+    filter: blur(2.5px) !important;
+}
+.blyrics-container > div.blyrics--active, .blyrics-container > .blyrics--animating {
+    opacity: 1 !important;
+    filter: blur(0) !important;
+}
+.blyrics-container > div.blyrics--active ~ div {
+    opacity: 0.66 !important;
+    filter: blur(0) !important;
+}
+.blyrics-container > div {
+    transition:
+        filter calc(var(--blyrics-duration) / 3) 0.4s,
+        opacity calc(var(--blyrics-duration) / 2) 0.166s,
+        transform 0.166s var(--blyrics-anim-delay, 0s) !important;
+    padding: 16px 0 !important;
+    transform-origin: left center !important;
+}
+.blyrics-container > div:hover {
+    opacity: 1 !important;
+    filter: blur(0) !important;
+    transform: scale(1.01) !important;
+    transition: all 0.3s ease !important;
+}
+:not():not([blyrics-video-mode]):not([video-mode]):not(.lyra-blyrics-stage #player- {
+    max-width: 520px !important;
+}
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.2) #fff0;
+}
+* {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgb(255 255 255 / 0.2) transparent !important;
+}
+
+/* ==== Lyra car / cluster strip shim (auto-appended) ==== */
+.lyra-blyrics-stage,
+#blyrics-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+#blyrics-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.lyra-blyrics-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+.blyrics-container {
+  max-width: 100%;
+}
+body.cluster-bar .lyra-blyrics-stage,
+body.cluster-bar #blyrics-wrapper {
+  /* right stage already sized by host CSS; keep themes from exploding */
+  font-size: clamp(0.95rem, 2.2vw, 1.35rem) !important;
+}
+body.cluster-bar .blyrics--line {
+  transform-origin: center center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding-left: 0.15em !important;
+  padding-right: 0.15em !important;
+}
+body.cluster-bar .blyrics--line.blyrics--active {
+  --blyrics-active-scale: 1.06;
+  font-size: 1.15em;
+}
+body.cluster-bar .blyrics--line:not(.blyrics--active) {
+  opacity: 0.55;
+  font-size: 0.9em;
+}
+body.cluster-bar .lyra-blyrics-meta {
+  font-size: 0.7rem;
+  padding: 4px 12px;
+  opacity: 0.45;
+}
+/* Hide extension-only chrome if a theme resurrects it */
+#blyrics-ad-overlay,
+#blyrics-loader,
+.blyrics-footer,
+.blyrics-footer__container {
+  display: none !important;
+}
