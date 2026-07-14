@@ -23,6 +23,9 @@ tauri = { version = "2.11.3", features = [] }
 lyra-pack = { path = "../crates/lyra-pack" }
 lyra-project = { path = "../crates/lyra-project" }
 lyra-registry = { path = "../crates/lyra-registry" }
+tempfile = "3.27.0"
+walkdir = "2.5.0"
+tauri-plugin-dialog = "2.7.1"
 
 [lints]
 workspace = true
