@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/lyra-pack",
+    "crates/lyra-project",
+    "crates/lyra-registry",
+    "crates/lyra-cli",
+]
+
+[workspace.package]
+version = "0.1.0-alpha.1"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+repository = "https://github.com/anpplex/lyra-effects-studio"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "deny"
+pedantic = "warn"
+
