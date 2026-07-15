@@ -12,6 +12,7 @@
   "kind": "theme",
   "license": { "notice": "NOTICE", "spdx": "MIT" },
   "name": "Sustain",
+  "parameters": "parameters.json",
   "schemaVersion": 1,
   "version": "1.0.12"
 }

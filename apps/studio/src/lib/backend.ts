@@ -1,4 +1,5 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import type { ParameterSchema } from "../studio/parameterEditor";
 
 export interface AppInfo {
   appVersion: string;
@@ -16,6 +17,7 @@ export interface EditablePack {
   stylePath: string;
   styleSource: string;
   styleSha256: string;
+  parameters?: ParameterSchema | null;
 }
 
 export interface ProjectSnapshot {
@@ -75,6 +77,29 @@ const fixtureProject: ProjectSnapshot = {
       stylePath: "/browser-fixture/future-lyrics/sustain/theme/lyra.css",
       styleSource: ":root {\n  --lyra-font-size: 42px;\n  --lyra-glow: 18%;\n}\n",
       styleSha256: "fixture-sustain",
+      parameters: {
+        schemaVersion: 1,
+        groups: [
+          {
+            id: "typography",
+            label: "Typography",
+            parameters: [
+              { id: "font-size", label: "Font size", control: "length", binding: { cssVariable: "--lyra-font-size" }, defaultValue: 42, unit: "px", minimum: 28, maximum: 64, step: 1 },
+              { id: "font-family", label: "Font family", control: "text", binding: { cssVariable: "--lyra-font-family" }, defaultValue: "Inter" },
+              { id: "font-weight", label: "Font weight", control: "select", binding: { cssVariable: "--lyra-font-weight" }, defaultValue: "600", options: [{ label: "Regular", value: "400" }, { label: "Semibold", value: "600" }, { label: "Bold", value: "700" }] },
+            ],
+          },
+          {
+            id: "light",
+            label: "Light & motion",
+            parameters: [
+              { id: "accent", label: "Accent", control: "color", binding: { cssVariable: "--lyra-accent" }, defaultValue: "#53d6d8" },
+              { id: "glow", label: "Glow", control: "number", binding: { cssVariable: "--lyra-glow" }, defaultValue: 18, unit: "%", minimum: 0, maximum: 36, step: 1 },
+              { id: "show-orbit", label: "Ambient orbit", control: "toggle", binding: { cssVariable: "--lyra-show-orbit" }, defaultValue: true },
+            ],
+          },
+        ],
+      },
     },
     {
       id: "io.github.chengggit.youtube-music-dynamic-theme",

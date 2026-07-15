@@ -8,6 +8,7 @@ The Rust project command layer applies these rules:
 - Pack manifests are discovered without following directory symlinks;
 - an editable CSS file must be the `entry.style` declared by its validated Pack manifest;
 - canonical Pack and style paths must remain inside the detected project boundary;
+- a declared parameter Schema must resolve inside the Pack root, validate successfully and remain below 512 KiB;
 - editable source must be UTF-8 and no larger than 2 MiB;
 - every save compares the current source SHA-256 with the hash returned by open;
 - a mismatch returns `conflict` and never overwrites the external change;

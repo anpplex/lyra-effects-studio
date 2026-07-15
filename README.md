@@ -2,12 +2,12 @@
 
 Lyra Effects Studio is a cross-platform editor, previewer, device debugger, and signed Theme Registry toolchain for [Lyra](https://github.com/anpplex/Lyra) lyric effects. macOS is the first desktop release target; the Rust core and CLI are designed for macOS, Windows, and Linux.
 
-The project is in active development. The public Pack and Registry contracts, Rust CLI, Tauri shell, interactive Studio workspace and conflict-safe CSS project persistence are available; schema-driven editing and the Android bridge are the next milestones.
+The project is in active development. The public Pack and Registry contracts, Rust CLI, Tauri shell, interactive Studio workspace, schema-driven editing and conflict-safe CSS project persistence are available; the Android bridge is the next milestone.
 
 ## What is included
 
 - Cross-platform Rust workspace shared by the CLI and Tauri 2 desktop application.
-- Three-column Studio workspace with theme navigation, a true-ratio 4032 × 284 preview, exact parameter tuning, generated CSS patches and diagnostics.
+- Three-column Studio workspace with theme navigation, a true-ratio 4032 × 284 preview, Schema-generated controls, minimal CSS patches, undo/redo and diagnostics.
 - Open, versioned Pack, parameter, scenario, Device Profile and Registry contracts.
 - Deterministic Theme Pack builder and canonical JSON encoder.
 - Ed25519-signed static Theme Registry designed for direct consumption by the Lyra APK.
@@ -40,7 +40,7 @@ npx tauri build --debug --no-bundle
 
 For browser-based UI development, run `npm run studio:dev`. Browser mode uses an in-memory fake backend; the Tauri build opens real standalone Packs or repo-bound `lyric-effects` projects through a native directory picker.
 
-Real saves are limited to the CSS entry declared by the Pack manifest, written through a temporary file and protected by a SHA-256 conflict check. See [project filesystem security](docs/security/project-filesystem.md).
+Real saves are limited to the CSS entry declared by the Pack manifest, written through a temporary file and protected by a SHA-256 conflict check. When a Pack declares `parameters`, Studio validates that Schema and generates color, length/number, select, toggle and text controls without theme-specific application code. See [project filesystem security](docs/security/project-filesystem.md).
 
 ## CLI
 

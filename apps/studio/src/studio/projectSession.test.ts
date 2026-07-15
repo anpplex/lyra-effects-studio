@@ -3,7 +3,10 @@ import type { ProjectSnapshot } from "../lib/backend";
 import {
   applySaveResult,
   createProjectSession,
+  editProjectParameter,
   editProjectSource,
+  redoProjectEdit,
+  undoProjectEdit,
 } from "./projectSession";
 
 const fixture: ProjectSnapshot = {
@@ -20,6 +23,25 @@ const fixture: ProjectSnapshot = {
       stylePath: "/tmp/lyra-theme/theme/lyra.css",
       styleSource: ":root {}\n",
       styleSha256: "before",
+      parameters: {
+        schemaVersion: 1,
+        groups: [
+          {
+            id: "type",
+            label: "Typography",
+            parameters: [
+              {
+                id: "font-size",
+                label: "Font size",
+                control: "length",
+                binding: { cssVariable: "--lyra-font-size" },
+                defaultValue: 42,
+                unit: "px",
+              },
+            ],
+          },
+        ],
+      },
     },
   ],
 };
@@ -46,5 +68,21 @@ describe("project editing session", () => {
     expect(conflicted.dirty).toBe(true);
     expect(conflicted.expectedSha256).toBe("before");
     expect(conflicted.status).toBe("conflict");
+  });
+
+  it("applies schema parameters to CSS and shares undo history with source edits", () => {
+    const opened = createProjectSession(fixture);
+    const resized = editProjectParameter(opened, "font-size", 48);
+    const sourceEdited = editProjectSource(resized, `${resized.draftSource}/* note */\n`);
+    const undoneSource = undoProjectEdit(sourceEdited);
+    const undoneParameter = undoProjectEdit(undoneSource);
+    const redoneParameter = redoProjectEdit(undoneParameter);
+
+    expect(resized.draftSource).toContain("--lyra-font-size: 48px;");
+    expect(resized.dirty).toBe(true);
+    expect(sourceEdited.parameterEditor?.values["font-size"]).toBe(48);
+    expect(undoneSource.draftSource).toBe(resized.draftSource);
+    expect(undoneParameter.draftSource).toBe(fixture.packs[0]?.styleSource);
+    expect(redoneParameter.draftSource).toBe(resized.draftSource);
   });
 });

@@ -32,4 +32,22 @@ describe("Studio workspace", () => {
     expect(input).toHaveValue(48);
     expect(screen.getByTestId("parameter-fontSize")).toHaveValue("48");
   });
+
+  it("generates project controls from the parameter schema with undo support", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><App /></StrictMode>);
+
+    await user.click(screen.getByTestId("open-project"));
+    await user.click(await screen.findByTestId("inspector-design"));
+    const size = await screen.findByTestId("schema-parameter-font-size-value");
+    await user.clear(size);
+    await user.type(size, "48");
+
+    await user.click(screen.getByTestId("inspector-source"));
+    expect((screen.getByTestId("source-editor") as HTMLTextAreaElement).value).toContain("--lyra-font-size: 48px;");
+
+    await user.click(screen.getByTestId("inspector-design"));
+    await user.click(screen.getByTestId("undo-parameter"));
+    expect(screen.getByTestId("schema-parameter-font-size-value")).toHaveValue(42);
+  });
 });

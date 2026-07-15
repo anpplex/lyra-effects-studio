@@ -15,10 +15,14 @@ import {
 import {
   applySaveResult,
   createProjectSession,
+  editProjectParameter,
   editProjectSource,
+  redoProjectEdit,
   selectProjectPack,
+  undoProjectEdit,
   type ProjectSession,
 } from "./studio/projectSession";
+import type { ParameterDefinition, ParameterValue } from "./studio/parameterEditor";
 
 type NumericParameter = Exclude<keyof StudioParameters, "showSafeArea">;
 
@@ -88,6 +92,63 @@ function ParameterSlider({
   );
 }
 
+function NumericValueField({
+  testId,
+  label,
+  value,
+  minimum,
+  maximum,
+  step,
+  unit,
+  onCommit,
+}: {
+  testId: string;
+  label: string;
+  value: number;
+  minimum?: number;
+  maximum?: number;
+  step: number;
+  unit?: string;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const numeric = Number(draft);
+    if (draft.trim() && Number.isFinite(numeric)) onCommit(numeric);
+    else setDraft(String(value));
+  };
+  return <span className="parameter-value"><input data-testid={testId} aria-label={`${label} exact value`} type="number" min={minimum} max={maximum} step={step} value={draft} onChange={(event) => setDraft(event.currentTarget.value)} onBlur={commit} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /><span>{unit ?? ""}</span></span>;
+}
+
+function SchemaParameterControl({
+  parameter,
+  value,
+  onChange,
+}: {
+  parameter: ParameterDefinition;
+  value: ParameterValue;
+  onChange: (value: ParameterValue) => void;
+}) {
+  const testId = `schema-parameter-${parameter.id}`;
+  if (parameter.control === "toggle") {
+    return <label className="switch-row schema-switch"><span><strong>{parameter.label}</strong><small>{parameter.binding.cssVariable}</small></span><input data-testid={testId} type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.currentTarget.checked)} /><i /></label>;
+  }
+  if (parameter.control === "select") {
+    return <label className="schema-field"><span>{parameter.label}<small>{parameter.binding.cssVariable}</small></span><select data-testid={testId} value={String(value)} onChange={(event) => onChange(event.currentTarget.value)}>{(parameter.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
+  }
+  if (parameter.control === "color") {
+    return <label className="schema-field color-field"><span>{parameter.label}<small>{parameter.binding.cssVariable}</small></span><span className="color-value"><input data-testid={testId} type="color" value={String(value)} onChange={(event) => onChange(event.currentTarget.value)} /><code>{String(value)}</code></span></label>;
+  }
+  if (parameter.control === "length" || parameter.control === "number") {
+    const numeric = typeof value === "number" ? value : Number(value);
+    const minimum = parameter.minimum ?? 0;
+    const maximum = parameter.maximum ?? Math.max(100, numeric * 2);
+    return <div className="parameter-control schema-number"><span><label htmlFor={testId}>{parameter.label}<small>{parameter.binding.cssVariable}</small></label><NumericValueField testId={`${testId}-value`} label={parameter.label} value={numeric} minimum={parameter.minimum} maximum={parameter.maximum} step={parameter.step ?? 1} unit={parameter.unit} onCommit={onChange} /></span><input id={testId} data-testid={testId} aria-label={parameter.label} type="range" min={minimum} max={maximum} step={parameter.step ?? 1} value={numeric} onChange={(event) => onChange(Number(event.currentTarget.value))} /></div>;
+  }
+  return <label className="schema-field"><span>{parameter.label}<small>{parameter.binding.cssVariable}</small></span><input data-testid={testId} type="text" value={String(value)} onChange={(event) => onChange(event.currentTarget.value)} /></label>;
+}
+
 function studioPacksFromProject(project: ProjectSnapshot): PackSummary[] {
   const families = new Map<string, PackSummary>();
   for (const pack of project.packs) {
@@ -125,6 +186,12 @@ function App() {
     setState((current) => updateParameter(current, key, value));
   };
 
+  const handleSchemaParameter = (parameterId: string, value: ParameterValue) => {
+    setProjectSession((current) => current
+      ? editProjectParameter(current, parameterId, value)
+      : current);
+  };
+
   const saveProject = useCallback(async () => {
     if (!projectSession?.dirty || projectSession.status === "saving") return;
     const request = {
@@ -146,11 +213,16 @@ function App() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "s") {
         event.preventDefault();
         void saveProject();
+      } else if (projectSession?.parameterEditor && (event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "z") {
+        event.preventDefault();
+        setProjectSession((current) => current
+          ? event.shiftKey ? redoProjectEdit(current) : undoProjectEdit(current)
+          : current);
       }
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [saveProject]);
+  }, [projectSession?.parameterEditor, saveProject]);
 
   const openProject = async () => {
     setProjectError(undefined);
@@ -261,9 +333,14 @@ function App() {
             {(["design", "source", "diagnostics"] as InspectorTab[]).map((tab) => <button key={tab} data-testid={`inspector-${tab}`} role="tab" aria-selected={state.inspectorTab === tab} className={state.inspectorTab === tab ? "active" : ""} onClick={() => setState((current) => ({ ...current, inspectorTab: tab }))}>{tab === "design" ? <Icon name="sliders" /> : tab === "source" ? <Icon name="code" /> : <Icon name="warning" />}{tab === "design" ? "Design" : tab === "source" ? "Source" : "Issues"}</button>)}
           </div>
           {state.inspectorTab === "design" && <div className="inspector-content">
-            <section className="inspector-section"><div className="section-title"><span>Typography</span><Icon name="chevron" size={13} /></div><ParameterSlider label="Font size" name="fontSize" min={28} max={64} value={state.parameters.fontSize} suffix=" px" onChange={handleParameter} /><ParameterSlider label="Right zone" name="rightZone" min={35} max={68} value={state.parameters.rightZone} suffix="%" onChange={handleParameter} /></section>
-            <section className="inspector-section"><div className="section-title"><span>Light & motion</span><Icon name="chevron" size={13} /></div><ParameterSlider label="Glow" name="glow" min={0} max={36} value={state.parameters.glow} suffix="%" onChange={handleParameter} /><ParameterSlider label="Motion" name="motion" min={0.2} max={2} step={0.1} value={state.parameters.motion} suffix=" s" onChange={handleParameter} /></section>
-            <section className="inspector-section"><div className="section-title"><span>Guides</span><Icon name="chevron" size={13} /></div><label className="switch-row"><span><strong>Safe area</strong><small>Show protected rendering bounds</small></span><input data-testid="safe-area-toggle" type="checkbox" checked={state.parameters.showSafeArea} onChange={(event) => { const checked = event.currentTarget.checked; setState((current) => updateParameter(current, "showSafeArea", checked)); }} /><i /></label></section>
+            {projectSession?.parameterEditor ? <>
+              <div className="history-toolbar" aria-label="Edit history"><span>Parameter schema</span><div><button data-testid="undo-parameter" disabled={!projectSession.parameterEditor.canUndo} onClick={() => setProjectSession((current) => current ? undoProjectEdit(current) : current)}>Undo</button><button data-testid="redo-parameter" disabled={!projectSession.parameterEditor.canRedo} onClick={() => setProjectSession((current) => current ? redoProjectEdit(current) : current)}>Redo</button></div></div>
+              {projectSession.parameterEditor.schema.groups.map((group) => <section className="inspector-section" key={group.id}><div className="section-title"><span>{group.label}</span><Icon name="chevron" size={13} /></div>{group.parameters.map((parameter) => <SchemaParameterControl key={parameter.id} parameter={parameter} value={projectSession.parameterEditor?.values[parameter.id] ?? parameter.defaultValue} onChange={(value) => handleSchemaParameter(parameter.id, value)} />)}</section>)}
+            </> : <>
+              <section className="inspector-section"><div className="section-title"><span>Typography</span><Icon name="chevron" size={13} /></div><ParameterSlider label="Font size" name="fontSize" min={28} max={64} value={state.parameters.fontSize} suffix=" px" onChange={handleParameter} /><ParameterSlider label="Right zone" name="rightZone" min={35} max={68} value={state.parameters.rightZone} suffix="%" onChange={handleParameter} /></section>
+              <section className="inspector-section"><div className="section-title"><span>Light & motion</span><Icon name="chevron" size={13} /></div><ParameterSlider label="Glow" name="glow" min={0} max={36} value={state.parameters.glow} suffix="%" onChange={handleParameter} /><ParameterSlider label="Motion" name="motion" min={0.2} max={2} step={0.1} value={state.parameters.motion} suffix=" s" onChange={handleParameter} /></section>
+              <section className="inspector-section"><div className="section-title"><span>Guides</span><Icon name="chevron" size={13} /></div><label className="switch-row"><span><strong>Safe area</strong><small>Show protected rendering bounds</small></span><input data-testid="safe-area-toggle" type="checkbox" checked={state.parameters.showSafeArea} onChange={(event) => { const checked = event.currentTarget.checked; setState((current) => updateParameter(current, "showSafeArea", checked)); }} /><i /></label></section>
+            </>}
             <section className="inspector-section compact"><div className="section-title"><span>Theme metadata</span><Icon name="chevron" size={13} /></div><dl className="metadata"><div><dt>Contract</dt><dd>lyra.pack/v1</dd></div><div><dt>Theme</dt><dd>{selectedTheme.id}</dd></div><div><dt>Version</dt><dd>{selectedTheme.version}</dd></div><div><dt>License</dt><dd>MIT</dd></div></dl></section>
           </div>}
           {state.inspectorTab === "source" && <div className="source-panel">
