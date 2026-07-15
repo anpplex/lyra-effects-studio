@@ -3,7 +3,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use lyra_pack::{PackManifest, sha256_hex};
-use lyra_project::{ParameterSchema, ProjectDetector, ProjectMode};
+use lyra_project::{ParameterSchema, PreviewScenario, ProjectDetector, ProjectMode};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use walkdir::WalkDir;
@@ -23,6 +23,27 @@ pub(crate) struct EditablePack {
     style_source: String,
     style_sha256: String,
     parameters: Option<ParameterSchema>,
+    documents: Vec<EditableDocument>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum EditableDocumentKind {
+    Css,
+    Html,
+    Json,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EditableDocument {
+    id: String,
+    label: String,
+    kind: EditableDocumentKind,
+    path: PathBuf,
+    relative_path: PathBuf,
+    source: String,
+    sha256: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -38,6 +59,15 @@ pub(crate) struct ProjectSnapshot {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SaveStyleRequest {
     pack_root: PathBuf,
+    expected_sha256: String,
+    source: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SaveDocumentRequest {
+    pack_root: PathBuf,
+    document_path: PathBuf,
     expected_sha256: String,
     source: String,
 }
@@ -65,6 +95,14 @@ pub(crate) fn open_project(path: &str) -> Result<ProjectSnapshot, String> {
 #[allow(clippy::needless_pass_by_value)]
 pub(crate) fn save_project_style(request: SaveStyleRequest) -> Result<SaveStyleResult, String> {
     save_style(&request)
+}
+
+#[tauri::command]
+#[allow(clippy::needless_pass_by_value)]
+pub(crate) fn save_project_document(
+    request: SaveDocumentRequest,
+) -> Result<SaveStyleResult, String> {
+    save_document(&request)
 }
 
 fn load_project(start: &Path) -> Result<ProjectSnapshot, String> {
@@ -141,6 +179,40 @@ fn load_editable_pack(effects_root: &Path, manifest_path: &Path) -> Result<Edita
         .as_deref()
         .map(|relative| load_parameter_schema(&pack_root, relative))
         .transpose()?;
+    let mut documents = vec![load_editable_document(
+        &pack_root,
+        "style".into(),
+        "Styles".into(),
+        relative_style,
+        EditableDocumentKind::Css,
+    )?];
+    if let Some(relative) = manifest.entry.html.as_deref() {
+        documents.push(load_editable_document(
+            &pack_root,
+            "html".into(),
+            "HTML".into(),
+            relative,
+            EditableDocumentKind::Html,
+        )?);
+    }
+    if let Some(relative) = manifest.parameters.as_deref() {
+        documents.push(load_editable_document(
+            &pack_root,
+            "parameters".into(),
+            "Parameters".into(),
+            relative,
+            EditableDocumentKind::Json,
+        )?);
+    }
+    for (index, relative) in manifest.scenarios.iter().enumerate() {
+        documents.push(load_editable_document(
+            &pack_root,
+            format!("scenario-{index}"),
+            format!("Scenario {}", index + 1),
+            relative,
+            EditableDocumentKind::Json,
+        )?);
+    }
 
     Ok(EditablePack {
         id: manifest.id,
@@ -152,6 +224,39 @@ fn load_editable_pack(effects_root: &Path, manifest_path: &Path) -> Result<Edita
         style_source,
         style_sha256: sha256_hex(&style_bytes),
         parameters,
+        documents,
+    })
+}
+
+fn load_editable_document(
+    pack_root: &Path,
+    id: String,
+    label: String,
+    relative: &str,
+    kind: EditableDocumentKind,
+) -> Result<EditableDocument, String> {
+    let path = pack_root
+        .join(relative)
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve editable document: {error}"))?;
+    if !path.starts_with(pack_root) {
+        return Err("Editable document escapes the Pack root".into());
+    }
+    let bytes =
+        fs::read(&path).map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    if bytes.len() > MAX_EDITABLE_SOURCE_BYTES {
+        return Err("Editable document exceeds the 2 MiB editor limit".into());
+    }
+    let source = String::from_utf8(bytes.clone())
+        .map_err(|_| "Editable document must be valid UTF-8".to_owned())?;
+    Ok(EditableDocument {
+        id,
+        label,
+        kind,
+        path,
+        relative_path: PathBuf::from(relative),
+        source,
+        sha256: sha256_hex(&bytes),
     })
 }
 
@@ -225,13 +330,107 @@ fn save_style(request: &SaveStyleRequest) -> Result<SaveStyleResult, String> {
     })
 }
 
+fn save_document(request: &SaveDocumentRequest) -> Result<SaveStyleResult, String> {
+    if request.source.is_empty()
+        || request.source.len() > MAX_EDITABLE_SOURCE_BYTES
+        || request.source.contains('\0')
+    {
+        return Err("Document source is empty, contains NUL, or exceeds the 2 MiB limit".into());
+    }
+    let snapshot = load_project(&request.pack_root)?;
+    let canonical_pack_root = request
+        .pack_root
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    let canonical_document_path = request
+        .document_path
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    let pack = snapshot
+        .packs
+        .iter()
+        .find(|pack| pack.root == canonical_pack_root)
+        .ok_or_else(|| "Pack is not part of the detected project".to_owned())?;
+    let document = pack
+        .documents
+        .iter()
+        .find(|document| document.path == canonical_document_path)
+        .ok_or_else(|| "Document is not declared by the Pack manifest".to_owned())?;
+    if document.sha256 != request.expected_sha256 {
+        return Ok(SaveStyleResult {
+            status: SaveStatus::Conflict,
+            sha256: document.sha256.clone(),
+        });
+    }
+    if document.kind == EditableDocumentKind::Json {
+        validate_json_document(document, &request.source)?;
+    }
+
+    let parent = document
+        .path
+        .parent()
+        .ok_or_else(|| "Document path has no parent directory".to_owned())?;
+    let mut temporary =
+        NamedTempFile::new_in(parent).map_err(|error| format!("save failed: {error}"))?;
+    temporary
+        .write_all(request.source.as_bytes())
+        .and_then(|()| temporary.as_file_mut().sync_all())
+        .map_err(|error| format!("save failed: {error}"))?;
+    temporary
+        .persist(&document.path)
+        .map_err(|error| format!("save failed: {}", error.error))?;
+
+    Ok(SaveStyleResult {
+        status: SaveStatus::Saved,
+        sha256: sha256_hex(request.source.as_bytes()),
+    })
+}
+
+fn validate_json_document(document: &EditableDocument, source: &str) -> Result<(), String> {
+    if document.id == "parameters" {
+        let schema =
+            ParameterSchema::from_slice(source.as_bytes()).map_err(|error| error.to_string())?;
+        let diagnostics = schema.validate();
+        if !diagnostics.is_empty() {
+            return Err(format!(
+                "Parameter schema validation failed: {}",
+                diagnostics
+                    .iter()
+                    .map(|item| item.code.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    } else if document.id.starts_with("scenario-") {
+        let scenario =
+            PreviewScenario::from_slice(source.as_bytes()).map_err(|error| error.to_string())?;
+        let diagnostics = scenario.validate();
+        if !diagnostics.is_empty() {
+            return Err(format!(
+                "Scenario validation failed: {}",
+                diagnostics
+                    .iter()
+                    .map(|item| item.code.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    } else {
+        serde_json::from_str::<serde_json::Value>(source)
+            .map_err(|error| format!("JSON syntax error: {error}"))?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
 
     use tempfile::TempDir;
 
-    use super::{SaveStatus, SaveStyleRequest, load_project, save_style};
+    use super::{
+        SaveDocumentRequest, SaveStatus, SaveStyleRequest, load_project, save_document, save_style,
+    };
 
     #[test]
     fn opens_a_standalone_pack_and_returns_editable_style_source() {
@@ -247,6 +446,10 @@ mod tests {
             ":root { --lyra-size: 42px; }\n"
         );
         assert_eq!(snapshot.packs[0].style_sha256.len(), 64);
+        assert_eq!(snapshot.packs[0].documents.len(), 3);
+        assert_eq!(snapshot.packs[0].documents[0].id, "style");
+        assert_eq!(snapshot.packs[0].documents[1].id, "html");
+        assert_eq!(snapshot.packs[0].documents[2].id, "parameters");
         let parameters = snapshot.packs[0]
             .parameters
             .as_ref()
@@ -272,6 +475,48 @@ mod tests {
         assert_eq!(
             fs::read_to_string(project.path().join("theme/lyra.css")).expect("read style"),
             request.source
+        );
+    }
+
+    #[test]
+    fn saves_only_manifest_declared_documents() {
+        let project = standalone_project();
+        let snapshot = load_project(project.path()).expect("load project");
+        let pack = &snapshot.packs[0];
+        let document = pack
+            .documents
+            .iter()
+            .find(|document| document.id == "parameters")
+            .expect("parameters document");
+        let source = document.source.replace("42", "48");
+
+        let result = save_document(&SaveDocumentRequest {
+            pack_root: pack.root.clone(),
+            document_path: document.path.clone(),
+            expected_sha256: document.sha256.clone(),
+            source: source.clone(),
+        })
+        .expect("save document");
+
+        assert_eq!(result.status, SaveStatus::Saved);
+        assert_eq!(
+            fs::read_to_string(project.path().join("parameters.json")).expect("read parameters"),
+            source
+        );
+
+        let undeclared = project.path().join("notes.txt");
+        fs::write(&undeclared, "private notes\n").expect("undeclared fixture");
+        let error = save_document(&SaveDocumentRequest {
+            pack_root: pack.root.clone(),
+            document_path: undeclared.clone(),
+            expected_sha256: "ignored".into(),
+            source: "overwritten\n".into(),
+        })
+        .expect_err("undeclared documents must be rejected");
+        assert!(error.contains("not declared"));
+        assert_eq!(
+            fs::read_to_string(undeclared).expect("read undeclared fixture"),
+            "private notes\n"
         );
     }
 
@@ -316,7 +561,7 @@ mod tests {
                 "runtimeApi": ">=1.0.0 <2.0.0",
                 "bridgeApi": ">=1.0.0 <2.0.0"
               },
-              "entry": { "style": "theme/lyra.css" },
+              "entry": { "style": "theme/lyra.css", "html": "theme/index.html" },
               "parameters": "parameters.json",
               "capabilities": ["styles"]
             }"#,
@@ -344,6 +589,11 @@ mod tests {
             }"#,
         )
         .expect("parameters");
+        fs::write(
+            root.path().join("theme/index.html"),
+            "<main id=\"blyrics-wrapper\"></main>\n",
+        )
+        .expect("html");
         fs::write(
             root.path().join("theme/lyra.css"),
             ":root { --lyra-size: 42px; }\n",

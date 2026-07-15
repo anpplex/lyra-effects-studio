@@ -36,6 +36,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_info,
             project::open_project,
+            project::save_project_document,
             project::save_project_style
         ])
         .run(tauri::generate_context!())

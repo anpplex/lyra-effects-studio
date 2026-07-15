@@ -3,6 +3,7 @@ import {
   createBackend,
   type AppInfo,
   type ProjectSnapshot,
+  type SaveDocumentRequest,
   type SaveStyleRequest,
 } from "./backend";
 
@@ -43,7 +44,18 @@ describe("typed backend facade", () => {
       status: "saved",
       sha256: "next",
     });
+    const documentRequest: SaveDocumentRequest = {
+      packRoot: "/tmp/theme",
+      documentPath: "/tmp/theme/parameters.json",
+      expectedSha256: "json-before",
+      source: "{}\n",
+    };
+    await expect(backend.saveDocument(documentRequest)).resolves.toEqual({
+      status: "saved",
+      sha256: "next",
+    });
     expect(invoke).toHaveBeenNthCalledWith(1, "open_project", { path: "/tmp/theme" });
     expect(invoke).toHaveBeenNthCalledWith(2, "save_project_style", { request: saveRequest });
+    expect(invoke).toHaveBeenNthCalledWith(3, "save_project_document", { request: documentRequest });
   });
 });

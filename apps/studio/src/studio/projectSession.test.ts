@@ -6,6 +6,7 @@ import {
   editProjectParameter,
   editProjectSource,
   redoProjectEdit,
+  selectProjectDocument,
   undoProjectEdit,
 } from "./projectSession";
 
@@ -42,6 +43,26 @@ const fixture: ProjectSnapshot = {
           },
         ],
       },
+      documents: [
+        {
+          id: "style",
+          label: "Styles",
+          kind: "css",
+          path: "/tmp/lyra-theme/theme/lyra.css",
+          relativePath: "theme/lyra.css",
+          source: ":root {}\n",
+          sha256: "before",
+        },
+        {
+          id: "parameters",
+          label: "Parameters",
+          kind: "json",
+          path: "/tmp/lyra-theme/parameters.json",
+          relativePath: "parameters.json",
+          source: "{\"schemaVersion\":1,\"groups\":[]}",
+          sha256: "parameters-before",
+        },
+      ],
     },
   ],
 };
@@ -84,5 +105,20 @@ describe("project editing session", () => {
     expect(undoneSource.draftSource).toBe(resized.draftSource);
     expect(undoneParameter.draftSource).toBe(fixture.packs[0]?.styleSource);
     expect(redoneParameter.draftSource).toBe(resized.draftSource);
+  });
+
+  it("switches active source documents and tracks their drafts independently", () => {
+    const opened = createProjectSession(fixture);
+    const selected = selectProjectDocument(opened, "parameters");
+    const parameterEdited = editProjectParameter(selected, "font-size", 48);
+    const edited = editProjectSource(selected, "{\"schemaVersion\":1,\"groups\":[]}\n");
+    const restoredStyle = selectProjectDocument(edited, "style");
+
+    expect(selected.activeDocument?.kind).toBe("json");
+    expect(parameterEdited.activeDocument.id).toBe("style");
+    expect(parameterEdited.draftSource).toContain("48px");
+    expect(edited.dirty).toBe(true);
+    expect(restoredStyle.draftSource).toBe(":root {}\n");
+    expect(restoredStyle.sourceWorkspace?.documents.find((item) => item.id === "parameters")?.dirty).toBe(true);
   });
 });

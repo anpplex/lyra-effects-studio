@@ -8,6 +8,7 @@ The project is in active development. The public Pack and Registry contracts, Ru
 
 - Cross-platform Rust workspace shared by the CLI and Tauri 2 desktop application.
 - Three-column Studio workspace with theme navigation, a true-ratio 4032 × 284 preview, Schema-generated controls, minimal CSS patches, undo/redo and diagnostics.
+- Manifest-scoped CSS, HTML and JSON source tabs with find/replace, syntax diagnostics and per-document dirty state.
 - Open, versioned Pack, parameter, scenario, Device Profile and Registry contracts.
 - Deterministic Theme Pack builder and canonical JSON encoder.
 - Ed25519-signed static Theme Registry designed for direct consumption by the Lyra APK.
@@ -40,7 +41,7 @@ npx tauri build --debug --no-bundle
 
 For browser-based UI development, run `npm run studio:dev`. Browser mode uses an in-memory fake backend; the Tauri build opens real standalone Packs or repo-bound `lyric-effects` projects through a native directory picker.
 
-Real saves are limited to the CSS entry declared by the Pack manifest, written through a temporary file and protected by a SHA-256 conflict check. When a Pack declares `parameters`, Studio validates that Schema and generates color, length/number, select, toggle and text controls without theme-specific application code. See [project filesystem security](docs/security/project-filesystem.md).
+Real saves are limited to editable entries declared by the Pack manifest, written through a temporary file and protected by a SHA-256 conflict check. CSS, HTML, parameter JSON and scenario JSON are loaded as separate documents; JSON contracts are validated again before persistence. Theme scripts are never exposed by the source workspace. When a Pack declares `parameters`, Studio validates that Schema and generates color, length/number, select, toggle and text controls without theme-specific application code. See [project filesystem security](docs/security/project-filesystem.md).
 
 ## CLI
 

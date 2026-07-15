@@ -5,7 +5,8 @@ The React/Vite frontend is the cross-platform presentation layer embedded by Tau
 - a searchable Pack and Theme library;
 - a true-ratio Avatr 4032 × 284 preview with day/night scenarios;
 - Pack Schema-generated color, length/number, select, toggle and text controls;
-- a real CSS source editor with dirty state, keyboard save and external-change protection;
+- manifest-scoped CSS, HTML and JSON source tabs with per-document dirty state;
+- source find/replace, syntax diagnostics, keyboard save and external-change protection;
 - generated minimal CSS parameter patches with shared source-level undo/redo;
 - preview events, diagnostics and theme metadata panels.
 
