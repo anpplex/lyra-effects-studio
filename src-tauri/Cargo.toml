@@ -25,6 +25,7 @@ lyra-pack = { path = "../crates/lyra-pack" }
 lyra-project = { path = "../crates/lyra-project" }
 lyra-registry = { path = "../crates/lyra-registry" }
 lyra-device = { path = "../crates/lyra-device" }
+lyra-adb = { path = "../crates/lyra-adb" }
 lyra-dev-server = { path = "../crates/lyra-dev-server" }
 tempfile = "3.27.0"
 walkdir = "2.5.0"

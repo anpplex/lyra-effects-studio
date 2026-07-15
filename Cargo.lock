@@ -1999,6 +1999,7 @@ dependencies = [
 name = "lyra-effects-studio-app"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "lyra-adb",
  "lyra-dev-server",
  "lyra-device",
  "lyra-pack",

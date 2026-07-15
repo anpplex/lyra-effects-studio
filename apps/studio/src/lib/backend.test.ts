@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createBackend,
+  type AdbPreflightStatus,
   type AppInfo,
   type DeviceBridgeStatus,
   type ProjectSnapshot,
@@ -71,5 +72,22 @@ describe("typed backend facade", () => {
     expect(invoke).toHaveBeenNthCalledWith(1, "get_device_bridge_status");
     expect(invoke).toHaveBeenNthCalledWith(2, "start_device_bridge");
     expect(invoke).toHaveBeenNthCalledWith(3, "stop_device_bridge");
+  });
+
+  it("uses no-argument commands for the user-gated ADB preflight", async () => {
+    const unconfigured: AdbPreflightStatus = {
+      configured: false,
+      readiness: "unconfigured",
+    };
+    const invoke = vi.fn(async () => unconfigured);
+    const backend = createBackend(invoke);
+
+    await expect(backend.deviceBridgeAdbStatus()).resolves.toEqual(unconfigured);
+    await expect(backend.chooseDeviceBridgeAdbExecutable()).resolves.toEqual(unconfigured);
+    await expect(backend.checkDeviceBridgeAdb()).resolves.toEqual(unconfigured);
+    expect(invoke).toHaveBeenNthCalledWith(1, "get_device_bridge_adb_status");
+    expect(invoke).toHaveBeenNthCalledWith(2, "choose_device_bridge_adb_executable");
+    expect(invoke).toHaveBeenNthCalledWith(3, "check_device_bridge_adb");
+    expect(invoke).not.toHaveBeenCalledWith(expect.any(String), expect.anything());
   });
 });

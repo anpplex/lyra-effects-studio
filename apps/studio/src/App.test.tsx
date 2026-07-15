@@ -48,6 +48,25 @@ describe("Studio workspace", () => {
     expect(await screen.findByText("Bridge off")).toBeInTheDocument();
   });
 
+  it("requires explicit ADB selection before checking a device", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><App /></StrictMode>);
+
+    const control = await screen.findByTestId("device-adb-control");
+    expect(await screen.findByText("ADB not configured")).toBeInTheDocument();
+    const check = screen.getByTestId("device-adb-check");
+    expect(check).toBeDisabled();
+    expect(control).not.toHaveTextContent("/Users/");
+    expect(control).not.toHaveTextContent("Bearer");
+
+    await user.click(screen.getByTestId("device-adb-select"));
+    expect(await screen.findByText("ADB selected")).toBeInTheDocument();
+    expect(check).toBeEnabled();
+
+    await user.click(check);
+    expect(await screen.findByText("1 device ready")).toBeInTheDocument();
+  });
+
   it("generates project controls from the parameter schema with undo support", async () => {
     const user = userEvent.setup();
     render(<StrictMode><App /></StrictMode>);

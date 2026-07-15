@@ -5,16 +5,18 @@
 M3 slice 3C adds a separate cross-platform Rust crate, `lyra-adb`, that
 implements the portable `lyra_device::AdbClient` trait through fixed Android
 Debug Bridge process invocations. It is the first code that can launch an ADB
-binary, but it is not wired into Tauri, Studio, the Dev Bridge controller or
-Android. Constructing the crate does not discover an SDK, start a server or
-run a process; a future trusted integration must explicitly construct it and
-invoke one of the typed `AdbClient` operations.
+binary. M3 slice 3D now wires only its `list_devices` operation into a
+user-gated Studio preflight: Rust retains a native-picker-selected executable
+path in memory and creates `SystemAdb` only after the user explicitly chooses
+**Check devices**. Constructing the crate itself still does not discover an
+SDK, start a server or run a process.
 
-This slice does not add a Studio button, automatic device selection, bearer
-provisioning, Pack transfer workflow, Android runtime source, command shell,
-environment-variable discovery or a connection retry loop. The completed
-portable reverse coordinator remains the owner of the single-ready-device
-selection rule.
+The adapter does not add automatic device selection, bearer provisioning, Pack
+transfer workflow, Android runtime source, command shell, environment-variable
+discovery or a connection retry loop. The later preflight UI is intentionally
+limited to native selection and a one-shot device-list check; it creates no
+reverse mapping. The completed portable reverse coordinator remains the owner
+of the single-ready-device selection rule.
 
 ## Alternatives considered
 
@@ -62,6 +64,12 @@ path is passed directly to `Command::new`, and every argument is a separate
 `OsString`; no call uses a shell, concatenated command line or environment
 target selection.
 
+The current Tauri integration does not expose this general `AdbClient` surface
+to the renderer. Its three no-argument preflight commands retain the selected
+canonical path privately and can call only `SystemAdb::list_devices` after a
+user action. It never calls reverse, remove-reverse or push, and it does not
+derive a listener port or read an Android SDK path.
+
 `list_devices` scans only after the exact `List of devices attached` header,
 which lets it ignore ADB daemon startup prelude lines. It accepts the portable
 states `device`, `offline` and `unauthorized`; a malformed UTF-8/header/row or
@@ -102,9 +110,9 @@ Windows portable-core gate; macOS already validates the whole workspace.
 
 ## Follow-on boundary
 
-A future separately scoped Tauri integration may receive an explicitly
-configured executable path, create `SystemAdb`, derive the listener port from
-the private `DevServerEndpoint`, and call the reverse coordinator. It must
-keep the bearer private, make device action explicit to the user, and add
+A future separately scoped Tauri integration may use the already selected
+private executable path, derive the listener port from the private
+`DevServerEndpoint`, and call the reverse coordinator. It must keep the bearer
+private, make device action explicit to the user, own mapping cleanup and add
 process-level integration tests before the adapter can control a vehicle
 runtime.

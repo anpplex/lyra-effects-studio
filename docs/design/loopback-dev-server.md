@@ -4,7 +4,7 @@
 
 This is M3 slice 2: a cross-platform host-side Dev Bridge server that gives one Lyra runtime a short-lived, authenticated loopback session. It follows the completed portable `lyra-device` protocol, revision and FakeADB core.
 
-The slice creates no real ADB process, Android source change, Tauri command or Studio UI. A later adapter will use the endpoint through a typed ADB reverse mapping and will consume the server status from Tauri.
+The slice itself creates no real ADB process, Android source change, Tauri command or Studio UI. A later user-gated preflight can check a separately selected ADB executable, but it does not consume this endpoint or create a mapping. A typed ADB reverse mapping remains a separately scoped follow-on.
 
 ## Alternatives considered
 
@@ -64,4 +64,4 @@ CI runs the new crate on macOS, Windows and Linux. No test requires `adb`, Andro
 
 ## Follow-on boundary
 
-M3 slice 3A provides narrow Tauri commands and a Studio control that start/stop this server and display non-secret connection state. M3 slice 3B adds the Rust-only `lyra-device` coordinator that requests a typed ADB reverse mapping through injected `FakeAdb` coverage. M3 slice 3C adds the explicit-path, fixed-argv `lyra-adb` process adapter with fake-executor coverage. A later Tauri action may derive the endpoint port privately and construct that adapter; Android/runtime integration remains separately scoped.
+M3 slice 3A provides narrow Tauri commands and a Studio control that start/stop this server and display non-secret connection state. M3 slice 3B adds the Rust-only `lyra-device` coordinator that requests a typed ADB reverse mapping through injected `FakeAdb` coverage. M3 slice 3C adds the explicit-path, fixed-argv `lyra-adb` process adapter with fake-executor coverage. M3 slice 3D adds a native-chooser, user-gated `devices -l` preflight that remains independent of this listener. A later explicit Tauri action may derive the endpoint port privately and construct a reverse mapping; Android/runtime integration remains separately scoped.
