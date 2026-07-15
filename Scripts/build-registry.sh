@@ -31,7 +31,20 @@ if [[ -z "$KEY_FILE" || ! -f "$KEY_FILE" ]]; then
 fi
 
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$REPO_ROOT" show -s --format=%ct HEAD)}"
-GENERATED_AT="$(python3 -c 'import datetime,sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]), datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))' "$SOURCE_DATE_EPOCH")"
+PYTHON_BIN="${LYRA_PYTHON_BIN:-}"
+if [[ -z "$PYTHON_BIN" ]]; then
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "Python 3 is required to build the Registry timestamp." >&2
+  exit 69
+fi
+GENERATED_AT="$("$PYTHON_BIN" -c 'import datetime,sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]), datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))' "$SOURCE_DATE_EPOCH")"
 REGISTRY_ID="${LYRA_REGISTRY_ID:-org.lyra.effects.official}"
 REGISTRY_NAME="${LYRA_REGISTRY_NAME:-Lyra Official Effects}"
 KEY_ID="${LYRA_REGISTRY_KEY_ID:-lyra-official-v1}"
@@ -40,6 +53,13 @@ rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/packs"
 cargo build --manifest-path "$REPO_ROOT/Cargo.toml" --release --bin lyra-effects >/dev/null
 CLI="$REPO_ROOT/target/release/lyra-effects"
+if [[ ! -x "$CLI" && -x "${CLI}.exe" ]]; then
+  CLI="${CLI}.exe"
+fi
+if [[ ! -x "$CLI" ]]; then
+  echo "Built lyra-effects CLI was not found at $CLI (or ${CLI}.exe)." >&2
+  exit 70
+fi
 
 packs='[]'
 for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
