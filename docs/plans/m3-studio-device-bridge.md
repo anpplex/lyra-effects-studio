@@ -33,7 +33,7 @@
 - Produces: `DeviceBridgeController::{new,status,start,stop}`, `DeviceBridgeSession`, `DeviceBridgeStatus { state, session }`, and Tauri commands `get_device_bridge_status`, `start_device_bridge`, `stop_device_bridge`.
 - Invariants: `RunningBridge` remains private and retains its endpoint; all public status types are `Serialize` and contain no endpoint or session-ID fields.
 
-- [ ] **Step 1: Write failing unit tests in `src-tauri/src/device_bridge.rs`.**
+- [x] **Step 1: Write failing unit tests in `src-tauri/src/device_bridge.rs`.**
 
   Add a `#[cfg(test)]` module with the following state-transition assertions. Keep the raw TCP helper private to the test module; it reads the private endpoint only to send `Fixtures/Device/hello-valid.json` with the current bearer.
 
@@ -72,13 +72,13 @@
   }
   ```
 
-- [ ] **Step 2: Run the focused tests to verify they fail.**
+- [x] **Step 2: Run the focused tests to verify they fail.**
 
   Run: `cargo test -p lyra-effects-studio-app device_bridge --lib`
 
   Expected: compilation failure because `device_bridge` and its controller types do not exist.
 
-- [ ] **Step 3: Add direct dependencies and the minimal controller.**
+- [x] **Step 3: Add direct dependencies and the minimal controller.**
 
   In `src-tauri/Cargo.toml`, add `lyra-dev-server = { path = "../crates/lyra-dev-server" }` and direct Tokio support:
 
@@ -111,7 +111,7 @@
 
   Implement `DeviceBridgeController` with `Mutex<Option<RunningBridge>>`. `start` creates the fixed `HostPolicy`, starts `DevServer` only when absent, then returns `waiting` or `connected` according to `session_snapshot`. Convert a `SessionSnapshot` into `DeviceBridgeSession` by copying only `device_profile_id`, `protocol_version` and `capabilities`; discard `session_id`. `status` returns `stopped` when the option is absent. `stop` uses `take()` while locked, drops the guard, awaits `server.shutdown()`, then returns `stopped`. The private endpoint is retained in `RunningBridge`; use its loopback address for a `debug_assert!` during status calculation, but never serialize it.
 
-- [ ] **Step 4: Register the narrow commands with Tauri.**
+- [x] **Step 4: Register the narrow commands with Tauri.**
 
   In `src-tauri/src/lib.rs`, add `mod device_bridge;`, manage one controller, and register only these command signatures next to the existing project commands:
 
@@ -119,7 +119,7 @@
   #[tauri::command]
   pub(crate) async fn get_device_bridge_status(
       controller: tauri::State<'_, DeviceBridgeController>,
-  ) -> DeviceBridgeStatus;
+  ) -> Result<DeviceBridgeStatus, String>;
 
   #[tauri::command]
   pub(crate) async fn start_device_bridge(
@@ -134,13 +134,13 @@
 
   Convert only `ServerDiagnostic` to its stable `to_string()` form for rejected Tauri calls. Do not add a command that returns `DevServerEndpoint`.
 
-- [ ] **Step 5: Run focused Rust verification.**
+- [x] **Step 5: Run focused Rust verification.**
 
   Run: `cargo fmt --check && cargo test -p lyra-effects-studio-app --lib && cargo clippy -p lyra-effects-studio-app --all-targets -- -D warnings`
 
   Expected: the controller tests pass, authenticated fixture hello makes the status connected, and no warning or secret-bearing status field exists.
 
-- [ ] **Step 6: Commit the independently testable backend boundary.**
+- [x] **Step 6: Commit the independently testable backend boundary.**
 
   ```sh
   git add src-tauri/Cargo.toml src-tauri/src/device_bridge.rs src-tauri/src/lib.rs Cargo.lock
@@ -158,7 +158,7 @@
 - Produces: `DeviceBridgeState`, `DeviceBridgeSession`, `DeviceBridgeStatus`, plus `StudioBackend.deviceBridgeStatus()`, `.startDeviceBridge()` and `.stopDeviceBridge()`.
 - Browser fixture behavior: `stopped → waiting → stopped`; no fixture method can construct a `connected` session or carry provisioning data.
 
-- [ ] **Step 1: Write failing facade tests.**
+- [x] **Step 1: Write failing facade tests.**
 
   Add a test that constructs `createBackend(invoke)` and asserts the exact invocation sequence:
 
@@ -175,13 +175,13 @@
   expect(invoke).toHaveBeenNthCalledWith(3, "stop_device_bridge");
   ```
 
-- [ ] **Step 2: Run the focused test to verify it fails.**
+- [x] **Step 2: Run the focused test to verify it fails.**
 
   Run: `npm --prefix apps/studio run test -- backend.test.ts`
 
   Expected: TypeScript or runtime failure because the bridge methods and status type are absent.
 
-- [ ] **Step 3: Implement only the typed facade and fixture state.**
+- [x] **Step 3: Implement only the typed facade and fixture state.**
 
   Add these TypeScript shapes without URL, port, token or session-ID properties:
 
@@ -200,13 +200,13 @@
 
   Map the three methods directly to the exact snake-case Tauri names. Give `createFixtureBackend` a closure-local `DeviceBridgeStatus`; clone it for reads, set `{ state: "waiting", session: null }` on start and `{ state: "stopped", session: null }` on stop.
 
-- [ ] **Step 4: Run focused frontend verification.**
+- [x] **Step 4: Run focused frontend verification.**
 
   Run: `npm --prefix apps/studio run lint && npm --prefix apps/studio run test -- backend.test.ts`
 
   Expected: facade tests prove the wire names and lint finds no unsafe `any` or unused type.
 
-- [ ] **Step 5: Commit the renderer contract.**
+- [x] **Step 5: Commit the renderer contract.**
 
   ```sh
   git add apps/studio/src/lib/backend.ts apps/studio/src/lib/backend.test.ts
@@ -225,7 +225,7 @@
 - Produces: a header `data-testid="device-bridge-control"`, status label, Start/Stop button and inline error message.
 - Copy: `Bridge off`, `Waiting for Lyra`, `Lyra connected`, `Start bridge`, `Stop bridge`.
 
-- [ ] **Step 1: Write failing UI tests.**
+- [x] **Step 1: Write failing UI tests.**
 
   Add one browser-fixture interaction test:
 
@@ -244,29 +244,29 @@
   });
   ```
 
-- [ ] **Step 2: Run the UI test to verify it fails.**
+- [x] **Step 2: Run the UI test to verify it fails.**
 
   Run: `npm --prefix apps/studio run test -- App.test.tsx`
 
   Expected: test failure because the header control has not been rendered.
 
-- [ ] **Step 3: Add status refresh and toggle behavior.**
+- [x] **Step 3: Add status refresh and toggle behavior.**
 
-  In `App.tsx`, initialize a `DeviceBridgeStatus` as stopped, load the real/fake status in a mount effect, and keep a `deviceBridgeBusy` plus optional error string. The toggle calls start only from stopped; it calls stop from waiting or connected. Both success paths replace status with the backend response; failures retain status and show a local error. Use a small pure label helper so `connected` can include the non-secret profile and negotiated capabilities in a tooltip or concise secondary line.
+  In `App.tsx`, initialize a `DeviceBridgeStatus` as stopped, load the real/fake status in a mount effect, and keep `deviceBridgeLoading`, `deviceBridgeBusy` plus a recoverable error flag. The toggle calls start only from stopped; it calls stop from waiting or connected. Both success paths replace status with the backend response; failures retain status and show a Retry action. Use a small pure label helper so `connected` can include the non-secret profile and negotiated capabilities in a tooltip or concise secondary line.
 
   Render the control in the existing `.publish-block`; preserve the Build pack affordance. The state indicator receives a phase class (`stopped`, `waiting` or `connected`) and the action button disables while the request is in flight.
 
-- [ ] **Step 4: Add the compact visual states.**
+- [x] **Step 4: Add the compact visual states.**
 
   In `App.css`, reuse the existing header scale. Give stopped a neutral dot, waiting an amber dot and connected the existing cyan glow. Add only bridge-control, bridge-action and bridge-error selectors; do not change the three-column editor layout or make the token space visible at narrow widths.
 
-- [ ] **Step 5: Run focused Studio verification.**
+- [x] **Step 5: Run focused Studio verification.**
 
   Run: `npm --prefix apps/studio run lint && npm --prefix apps/studio run test -- App.test.tsx && npm --prefix apps/studio run build`
 
   Expected: the browser fixture transition passes, all existing editor tests remain green, and TypeScript production build succeeds.
 
-- [ ] **Step 6: Commit the visible control.**
+- [x] **Step 6: Commit the visible control.**
 
   ```sh
   git add apps/studio/src/App.tsx apps/studio/src/App.css apps/studio/src/App.test.tsx
@@ -279,20 +279,21 @@
 - Modify: `README.md`
 - Modify: `docs/architecture/rust-tauri.md`
 - Modify: `docs/protocols/dev-bridge-v1.md`
+- Modify: `docs/design/loopback-dev-server.md`
 - Modify: `docs/plans/m3-studio-device-bridge.md`
 
 **Interfaces:**
 - Documents: exactly three lifecycle commands, non-secret status fields and the deferred FakeADB-only reverse coordinator.
 
-- [ ] **Step 1: Update public boundary documentation.**
+- [x] **Step 1: Update public boundary documentation.**
 
   State that Studio can start/stop the local listener and show `stopped`, `waiting`, or `connected`; specify that `SessionSnapshot.sessionId`, endpoint URL/port and bearer are not sent to the UI. Update the architecture boundary to name `src-tauri` as lifecycle owner and preserve `lyra-dev-server` as socket/protocol owner. Keep the README’s real ADB/Android adapter statement unchanged except to list the new local controls.
 
-- [ ] **Step 2: Mark this plan’s completed checkboxes.**
+- [x] **Step 2: Mark this plan’s completed checkboxes.**
 
   Replace every completed `- [ ]` in this file with `- [x]`; leave no incomplete item for work that was actually shipped.
 
-- [ ] **Step 3: Run the release verification set.**
+- [x] **Step 3: Run the release verification set.**
 
   ```sh
   npm run studio:lint
@@ -308,7 +309,7 @@
 
   Expected: every command exits 0, all status payloads are secret-free, no ADB executable is started, and no Android source changes.
 
-- [ ] **Step 4: Commit the documentation and verification record.**
+- [x] **Step 4: Commit the documentation and verification record.**
 
   ```sh
   git add README.md docs/architecture/rust-tauri.md docs/protocols/dev-bridge-v1.md docs/plans/m3-studio-device-bridge.md

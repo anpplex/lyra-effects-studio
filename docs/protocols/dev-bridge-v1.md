@@ -87,4 +87,6 @@ Callers branch on codes rather than English messages. The v1 core currently defi
 
 ## Current boundary
 
-This milestone does not execute `adb`, discover Android SDK paths, expose a Tauri command or modify the Lyra APK. It does listen only on an ephemeral IPv4 loopback port for the authenticated hello route; it has no LAN listener, WebSocket, command, Pack or filesystem endpoint. Future adapters must remain thin consumers of `lyra-device` and `lyra-dev-server`, preserve these stable codes and receive separate process, transport and Android integration tests.
+Studio's Tauri shell exposes only `get_device_bridge_status`, `start_device_bridge` and `stop_device_bridge`. They manage one ephemeral IPv4-loopback listener and return `stopped`, `waiting` or `connected`. A connected status projects only device profile, negotiated protocol version and sorted capabilities; the bearer, endpoint URL/port and server session ID remain inside Rust.
+
+This milestone does not execute `adb`, discover Android SDK paths or modify the Lyra APK. It has no LAN listener, WebSocket, command, Pack or filesystem endpoint beyond the authenticated `POST /v1/hello` route. Future adapters must remain thin consumers of `lyra-device` and `lyra-dev-server`, preserve these stable codes and receive separate process, transport and Android integration tests.
