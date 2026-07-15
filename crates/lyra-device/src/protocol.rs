@@ -14,18 +14,20 @@ pub struct DeviceDiagnostic {
 }
 
 impl DeviceDiagnostic {
-    fn invalid(message: impl Into<String>) -> Self {
-        Self {
-            code: "device.protocol.invalid".into(),
-            message: message.into(),
-        }
-    }
-
-    pub(crate) fn with_code(code: &str, message: impl Into<String>) -> Self {
+    #[must_use]
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
         }
+    }
+
+    fn invalid(message: impl Into<String>) -> Self {
+        Self::new("device.protocol.invalid", message)
+    }
+
+    pub(crate) fn with_code(code: &str, message: impl Into<String>) -> Self {
+        Self::new(code, message)
     }
 }
 
