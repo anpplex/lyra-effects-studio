@@ -53,13 +53,18 @@ states:
 |---|---|---|
 | `stopped` | No loopback listener is owned by Studio. | Absent |
 | `waiting` | A loopback listener is ready, but no runtime has authenticated. | Absent |
-| `connected` | One runtime profile completed authenticated hello negotiation. | Non-secret `SessionSnapshot` |
+| `connected` | One runtime profile completed authenticated hello negotiation. | Non-secret device summary |
 
 The Tauri command surface is intentionally limited to asynchronous
 `get_device_bridge_status`, `start_device_bridge` and `stop_device_bridge`.
 Each returns `DeviceBridgeStatus`; failures are returned as the existing
 stable `device.bridge.*` diagnostic text. No command accepts an address, port,
 token, shell fragment, Pack path or arbitrary protocol message.
+
+The controller maps the server's `SessionSnapshot` into a dedicated
+`DeviceBridgeSession` before serializing status. That projection keeps only
+`deviceProfileId`, `protocolVersion` and sorted `capabilities`; its internal
+random `sessionId` never crosses the desktop boundary.
 
 The React backend facade gains equivalent typed methods. Browser mode uses an
 in-memory fixture controller whose state changes from `stopped` to `waiting`
@@ -91,9 +96,10 @@ protocol and capabilities but never a URL, port, session ID or bearer token.
 Rust unit tests exercise controller status transitions with a real
 `lyra-dev-server` loopback listener: initial stopped state, idempotent start,
 authenticated fixture hello producing connected state, stop returning to
-stopped state, and JSON serialization that contains no bearer value. Tests may
-read private endpoint data only inside the Rust test module to send the trusted
-fixture hello; the public command type remains secret-free.
+stopped state, and JSON serialization that contains neither bearer nor
+session-ID data. Tests may read private endpoint data only inside the Rust
+test module to send the trusted fixture hello; the public command type remains
+secret-free.
 
 TypeScript tests assert the exact three Tauri command names and the typed
 request/response shape. Browser-backend tests cover fixture start/stop
