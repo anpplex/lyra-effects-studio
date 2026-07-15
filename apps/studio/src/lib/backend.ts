@@ -71,6 +71,19 @@ export interface DeviceBridgeStatus {
   session: DeviceBridgeSession | null;
 }
 
+export type AdbPreflightReadiness =
+  | "unconfigured"
+  | "notChecked"
+  | "noReadyDevice"
+  | "oneReadyDevice"
+  | "multipleReadyDevices"
+  | "error";
+
+export interface AdbPreflightStatus {
+  configured: boolean;
+  readiness: AdbPreflightReadiness;
+}
+
 export type InvokeTransport = (
   command: string,
   arguments_?: Record<string, unknown>,
@@ -81,6 +94,9 @@ export interface StudioBackend {
   deviceBridgeStatus(): Promise<DeviceBridgeStatus>;
   startDeviceBridge(): Promise<DeviceBridgeStatus>;
   stopDeviceBridge(): Promise<DeviceBridgeStatus>;
+  deviceBridgeAdbStatus(): Promise<AdbPreflightStatus>;
+  chooseDeviceBridgeAdbExecutable(): Promise<AdbPreflightStatus>;
+  checkDeviceBridgeAdb(): Promise<AdbPreflightStatus>;
   openProject(path: string): Promise<ProjectSnapshot>;
   saveStyle(request: SaveStyleRequest): Promise<SaveStyleResult>;
   saveDocument(request: SaveDocumentRequest): Promise<SaveStyleResult>;
@@ -99,6 +115,15 @@ export function createBackend(invoke: InvokeTransport): StudioBackend {
     },
     async stopDeviceBridge() {
       return (await invoke("stop_device_bridge")) as DeviceBridgeStatus;
+    },
+    async deviceBridgeAdbStatus() {
+      return (await invoke("get_device_bridge_adb_status")) as AdbPreflightStatus;
+    },
+    async chooseDeviceBridgeAdbExecutable() {
+      return (await invoke("choose_device_bridge_adb_executable")) as AdbPreflightStatus;
+    },
+    async checkDeviceBridgeAdb() {
+      return (await invoke("check_device_bridge_adb")) as AdbPreflightStatus;
     },
     async openProject(path) {
       return (await invoke("open_project", { path })) as ProjectSnapshot;
@@ -228,6 +253,7 @@ export function isTauriRuntime(): boolean {
 function createFixtureBackend(): StudioBackend {
   let project = structuredClone(fixtureProject);
   let deviceBridge: DeviceBridgeStatus = { state: "stopped", session: null };
+  let adbPreflight: AdbPreflightStatus = { configured: false, readiness: "unconfigured" };
   return {
     async appInfo() {
       return {
@@ -249,6 +275,17 @@ function createFixtureBackend(): StudioBackend {
     async stopDeviceBridge() {
       deviceBridge = { state: "stopped", session: null };
       return structuredClone(deviceBridge);
+    },
+    async deviceBridgeAdbStatus() {
+      return structuredClone(adbPreflight);
+    },
+    async chooseDeviceBridgeAdbExecutable() {
+      adbPreflight = { configured: true, readiness: "notChecked" };
+      return structuredClone(adbPreflight);
+    },
+    async checkDeviceBridgeAdb() {
+      adbPreflight = { configured: true, readiness: "oneReadyDevice" };
+      return structuredClone(adbPreflight);
     },
     async openProject() {
       return structuredClone(project);
