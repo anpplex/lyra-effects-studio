@@ -48,7 +48,7 @@
 - Produces: `AdbPreflightReadiness`, `AdbPreflightStatus`, private `AdbDeviceProbe`, `DeviceBridgeController::{adb_status,configure_adb_executable,check_adb}`.
 - Invariants: an unconfigured check does not call the probe; a configuration call does not call the probe; only `Device` transports count as ready.
 
-- [ ] **Step 1: Write failing controller tests before adding preflight types.**
+- [x] **Step 1: Write failing controller tests before adding preflight types.**
 
   In the existing `#[cfg(test)]` module in `src-tauri/src/device_bridge.rs`, add a queue-backed `FakeAdbProbe` that records each path and returns queued `Result<Vec<AdbDevice>, DeviceDiagnostic>` values. Add these tests using `tempfile::NamedTempFile` for real regular-file paths:
 
@@ -124,7 +124,7 @@
 
   Add one `BlockingProbe` test with a channel: begin `check_adb`, wait until the fake probe starts, configure a second `NamedTempFile`, release the fake and assert the returned plus stored status remain `notChecked`. Also add a non-file path test that returns `device.adb.invalidExecutable` and never calls the fake.
 
-- [ ] **Step 2: Run the focused tests to verify the red state.**
+- [x] **Step 2: Run the focused tests to verify the red state.**
 
   Run:
 
@@ -134,7 +134,7 @@
 
   Expected: compilation fails because `AdbPreflightStatus`, probe injection and controller methods do not exist.
 
-- [ ] **Step 3: Add the desktop-only adapter dependency and minimal production probe.**
+- [x] **Step 3: Add the desktop-only adapter dependency and minimal production probe.**
 
   Add this direct dependency to `src-tauri/Cargo.toml`:
 
@@ -215,7 +215,7 @@
   Re-lock after the worker completes; if `generation` differs, discard the
   stale result and return the current stored projection.
 
-- [ ] **Step 4: Run focused Rust verification and inspect the process boundary.**
+- [x] **Step 4: Run focused Rust verification and inspect the process boundary.**
 
   Run:
 
@@ -229,7 +229,7 @@
   Expected: all focused tests pass; the search finds process creation only in
   `crates/lyra-adb/src/adapter.rs`, and no controller test starts a binary.
 
-- [ ] **Step 5: Commit the testable controller boundary.**
+- [x] **Step 5: Commit the testable controller boundary.**
 
   ```sh
   git add src-tauri/Cargo.toml src-tauri/src/device_bridge.rs Cargo.lock
@@ -246,7 +246,7 @@
 - Produces: `get_device_bridge_adb_status`, `choose_device_bridge_adb_executable` and `check_device_bridge_adb` Tauri commands.
 - Invariants: no command parameter carries a path; cancellation returns the existing status; no dialog callback exposes its file path to the renderer.
 
-- [ ] **Step 1: Write the failing command-surface assertion.**
+- [x] **Step 1: Write the failing command-surface assertion.**
 
   Extend the `src-tauri/src/lib.rs` test module with this compile-time symbol
   check. It requires the three async command functions to exist without
@@ -261,7 +261,7 @@
   }
   ```
 
-- [ ] **Step 2: Run the library test to verify the commands are absent.**
+- [x] **Step 2: Run the library test to verify the commands are absent.**
 
   Run:
 
@@ -271,7 +271,7 @@
 
   Expected: compilation failure because the three new functions are absent.
 
-- [ ] **Step 3: Implement native picker plumbing and command wrappers.**
+- [x] **Step 3: Implement native picker plumbing and command wrappers.**
 
   Import `tauri_plugin_dialog::DialogExt` plus `tokio::sync::oneshot`. Add a
   private helper that starts the non-blocking native dialog and awaits exactly
@@ -328,7 +328,7 @@
   The chooser must be the only source of a production executable path. Do not
   add an argument to any wrapper, and do not log or serialize a selected path.
 
-- [ ] **Step 4: Verify the desktop command layer without opening a dialog.**
+- [x] **Step 4: Verify the desktop command layer without opening a dialog.**
 
   Run:
 
@@ -341,12 +341,17 @@
   Expected: the application library compiles, the command type test passes and
   no test calls the native picker or starts ADB.
 
-- [ ] **Step 5: Commit the narrow Tauri surface.**
+- [x] **Step 5: Commit the narrow Tauri surface.**
 
   ```sh
   git add src-tauri/src/lib.rs
   git commit -m "feat(adb): expose explicit Tauri preflight actions"
   ```
+
+  The controller and command surface were committed together as `bb7f158`
+  because the application crate's warning-free build requires registered
+  commands to reference the controller surface. The combined commit preserves
+  the same narrow production boundary and focused test evidence.
 
 ### Task 3: Extend the typed Studio facade and browser fixture
 
@@ -359,7 +364,7 @@
 - Produces: `AdbPreflightReadiness`, `AdbPreflightStatus` and three `StudioBackend` methods.
 - Browser fixture behavior: `unconfigured → notChecked → oneReadyDevice`; it does not contain a path, serial or raw process output.
 
-- [ ] **Step 1: Write failing typed-facade tests.**
+- [x] **Step 1: Write failing typed-facade tests.**
 
   Add types to the test import and append this exact interaction test:
 
@@ -382,7 +387,7 @@
   });
   ```
 
-- [ ] **Step 2: Run the focused facade test to verify the red state.**
+- [x] **Step 2: Run the focused facade test to verify the red state.**
 
   Run:
 
@@ -393,7 +398,7 @@
   Expected: TypeScript or runtime failure because the preflight status and
   methods do not exist.
 
-- [ ] **Step 3: Implement the safe TypeScript contract and fixture.**
+- [x] **Step 3: Implement the safe TypeScript contract and fixture.**
 
   Add these exact public types after `DeviceBridgeStatus`:
 
@@ -421,7 +426,7 @@
   "oneReadyDevice" }`. Return `structuredClone` from every fixture read or
   transition.
 
-- [ ] **Step 4: Run focused frontend verification.**
+- [x] **Step 4: Run focused frontend verification.**
 
   Run:
 
@@ -433,7 +438,7 @@
   Expected: the façade proves all three invocations have no renderer-supplied
   arguments, and lint finds no unsafe type escape.
 
-- [ ] **Step 5: Commit the renderer contract.**
+- [x] **Step 5: Commit the renderer contract.**
 
   ```sh
   git add apps/studio/src/lib/backend.ts apps/studio/src/lib/backend.test.ts
@@ -452,7 +457,7 @@
 - Produces: `data-testid="device-adb-control"`, `device-adb-select`, `device-adb-check` and safe visible readiness labels.
 - Copy: `ADB not configured`, `ADB selected`, `No ready device`, `1 device ready`, `Multiple devices`, `ADB check failed`, `Select ADB`, `Check devices`.
 
-- [ ] **Step 1: Write the failing browser-fixture interaction test.**
+- [x] **Step 1: Write the failing browser-fixture interaction test.**
 
   Add this test to `apps/studio/src/App.test.tsx`:
 
@@ -477,7 +482,7 @@
   });
   ```
 
-- [ ] **Step 2: Run the focused UI test to verify the red state.**
+- [x] **Step 2: Run the focused UI test to verify the red state.**
 
   Run:
 
@@ -487,7 +492,7 @@
 
   Expected: failure because the ADB control and methods are absent.
 
-- [ ] **Step 3: Add independent state, labels and event handlers.**
+- [x] **Step 3: Add independent state, labels and event handlers.**
 
   In `App.tsx`, define an `UNCONFIGURED_ADB_PREFLIGHT` constant and a pure
   `adbPreflightLabel(status, loading, failed)` helper that maps the six
@@ -522,7 +527,7 @@
   string, a path or a serial. A subsequent explicit Select ADB action clears
   the error when it returns a valid status.
 
-- [ ] **Step 4: Add compact, responsive styles.**
+- [x] **Step 4: Add compact, responsive styles.**
 
   In `App.css`, extend the existing flex selector list with
   `.device-adb-control` and `.device-adb-status`. Reuse neutral/amber/cyan/orange
@@ -532,7 +537,7 @@
   buttons and their accessible labels. Do not alter the three-column workspace
   grid, preview dimensions or Build pack button.
 
-- [ ] **Step 5: Run focused Studio verification.**
+- [x] **Step 5: Run focused Studio verification.**
 
   Run:
 
@@ -545,7 +550,7 @@
   Expected: fixture flow remains explicit, Check devices starts disabled and
   the production frontend compiles without a path/serial/token field.
 
-- [ ] **Step 6: Commit the visible preflight control.**
+- [x] **Step 6: Commit the visible preflight control.**
 
   ```sh
   git add apps/studio/src/App.tsx apps/studio/src/App.css apps/studio/src/App.test.tsx
@@ -569,7 +574,7 @@
 - Consumes: completed controller, Tauri commands and Studio control from Tasks 1–4.
 - Produces: accurate public documentation stating that real `devices -l` is user-triggered and that reverse mapping remains deferred.
 
-- [ ] **Step 1: Update scope and stable diagnostics.**
+- [x] **Step 1: Update scope and stable diagnostics.**
 
   Update README and architecture/design documents to say that Studio now has an
   in-memory, native-chooser ADB preflight that runs `devices -l` only after an
@@ -589,7 +594,7 @@
   `docs/plans/m3-system-adb-process-adapter.md` as complete and append its
   merge commit `d117a33`; do not alter its recorded validation evidence.
 
-- [ ] **Step 2: Record Task 1–4 completion and check documentation consistency.**
+- [x] **Step 2: Record Task 1–4 completion and check documentation consistency.**
 
   After focused tests and docs updates pass, mark every completed checkbox in
   Tasks 1–4 of this plan. Run:
@@ -603,7 +608,7 @@
   Expected: no placeholder or whitespace failure; every mention distinguishes
   explicit preflight from the still-deferred reverse mapping.
 
-- [ ] **Step 3: Run the complete local release gate.**
+- [x] **Step 3: Run the complete local release gate.**
 
   Run every command separately and require exit code 0:
 
@@ -623,7 +628,15 @@
   executable. The no-bundle Tauri build may compile the production probe but
   must not call its `list_devices` method.
 
-- [ ] **Step 4: Commit documentation and validation evidence.**
+  Verified locally on 2026-07-15: `npm run studio:lint`, `npm run studio:test`
+  (7 files / 27 tests), `npm run studio:build`, `cargo fmt --check`,
+  `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test
+  --workspace`, `cargo build --workspace --release`, `npx tauri build --debug
+  --no-bundle` and `git diff --check` all exited successfully. The full Rust
+  suite exercised only fake probes/executors; no real ADB executable was
+  discovered or launched.
+
+- [x] **Step 4: Commit documentation and validation evidence.**
 
   Add a dated, concise list of the successful release-gate commands to this
   plan, then commit the documentation and status changes:

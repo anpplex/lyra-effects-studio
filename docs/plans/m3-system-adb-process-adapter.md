@@ -193,7 +193,8 @@ git commit -m "docs(adb): publish process adapter boundary"
 - Verify: Task 1 and Task 2 files
 
 **Interfaces:**
-- Consumes: an explicit adapter that is not constructed by Tauri and never runs in tests.
+- Consumes: an explicit adapter whose tests never run a real ADB binary. A
+  later separately scoped preflight may construct it only after a user action.
 - Produces: a GitHub pull request with Linux, Windows and macOS CI evidence.
 
 - [x] **Step 1: Run the full local release gate.**
@@ -220,7 +221,7 @@ Mark Task 2 and Task 3 verification checkboxes `[x]` only after their commands h
 
 Verified locally on 2026-07-15: Studio lint, 25 Studio tests, Studio production build, Rust formatting, workspace Clippy, workspace tests, workspace release build and the no-bundle Tauri debug build all exited successfully. The Tauri CLI was installed with the README-mandated root `npm ci`; all adapter tests used the in-memory executor and no real ADB binary ran.
 
-- [ ] **Step 3: Push, open a pull request and squash-merge after CI.**
+- [x] **Step 3: Push, open a pull request and squash-merge after CI.**
 
 ```bash
 git push -u origin feature/adb-process-adapter
@@ -230,3 +231,5 @@ gh pr merge <pr-number> --squash --delete-branch
 ```
 
 Expected: Linux, Windows and macOS jobs pass before merging. Fast-forward `main` after merge, rerun `cargo test -p lyra-adb` and `npm run studio:test`, then verify a clean working tree.
+
+Completed by PR #10; squash merge commit `d117a33`.

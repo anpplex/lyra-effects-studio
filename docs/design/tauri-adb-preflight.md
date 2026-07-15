@@ -117,10 +117,11 @@ configuration change rejects a stale result. Existing `lyra-adb` unit tests
 continue to prove exact argv without running ADB.
 
 TypeScript backend tests assert the three new command names and browser-fixture
-transitions. React tests cover the disabled, configured, checking and
-ready/error labels. The full Studio lint/test/build, Rust format/Clippy/test,
-release build and no-bundle Tauri debug build remain required. CI must not
-install, discover or execute a real ADB binary.
+transitions. React tests cover the disabled, configured and ready fixture flow;
+Rust controller tests cover safe error projection and stale-result handling.
+The full Studio lint/test/build, Rust format/Clippy/test, release build and
+no-bundle Tauri debug build remain required. CI must not install, discover or
+execute a real ADB binary.
 
 ## Follow-on boundary
 

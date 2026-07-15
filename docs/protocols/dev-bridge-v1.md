@@ -62,7 +62,7 @@ Serials, ports and device paths are validated types. There is no raw command-str
 
 `DevBridgeReverseCoordinator` composes those operations without owning a process adapter. Its request accepts only a validated host `LocalPort` and always uses the fixed Android-side `DEV_BRIDGE_REMOTE_PORT` value `49321`. It selects exactly one transport in `device` state, creates a typed reverse mapping and returns an explicit mapping handle for `remove_reverse`. Zero ready transports return `device.adb.noEligibleDevice`; multiple ready transports return `device.adb.multipleEligibleDevices`. Neither selection failure issues a reverse call.
 
-`lyra-adb` supplies the host-side `SystemAdb` implementation of `AdbClient`. It accepts an explicit executable path but does not run a process until a typed trait method is invoked. It generates only `devices -l`, `-s <serial> reverse`, `-s <serial> reverse --remove` and `-s <serial> push` as separate no-shell arguments. Its process executor is fake-tested; Tauri and Studio do not construct it in this milestone.
+`lyra-adb` supplies the host-side `SystemAdb` implementation of `AdbClient`. It accepts an explicit executable path but does not run a process until a typed trait method is invoked. It generates only `devices -l`, `-s <serial> reverse`, `-s <serial> reverse --remove` and `-s <serial> push` as separate no-shell arguments. Its process executor is fake-tested. Studio's Tauri shell constructs it only inside the user-gated preflight worker after a native chooser selected an executable, and that worker invokes only `devices -l`.
 
 ## Stable diagnostics
 
@@ -85,6 +85,9 @@ Callers branch on codes rather than English messages. The v1 core currently defi
 | `device.adb.commandFailed` | One fixed ADB command exited unsuccessfully |
 | `device.adb.invalidDeviceList` | ADB device-list output was malformed, unsafe or not UTF-8 |
 | `device.adb.unsupportedDeviceState` | ADB device-list output used a state outside the portable contract |
+| `device.adb.notConfigured` | A user has not selected an ADB executable in this Studio session |
+| `device.adb.invalidExecutable` | The native selection did not resolve to a local regular file |
+| `device.adb.probeFailed` | Studio could not complete the isolated preflight worker |
 | `device.fakeAdb.invalidTranscript` | Transcript JSON is malformed |
 | `device.fakeAdb.unexpectedCall` | Operation order or arguments differ from the transcript |
 | `device.fakeAdb.pendingCalls` | A test finished before consuming every configured operation |
@@ -97,6 +100,6 @@ Callers branch on codes rather than English messages. The v1 core currently defi
 
 ## Current boundary
 
-Studio's Tauri shell exposes only `get_device_bridge_status`, `start_device_bridge` and `stop_device_bridge`. They manage one ephemeral IPv4-loopback listener and return `stopped`, `waiting` or `connected`. A connected status projects only device profile, negotiated protocol version and sorted capabilities; the bearer, endpoint URL/port and server session ID remain inside Rust. The portable reverse coordinator and `SystemAdb` have no Tauri command yet: a future explicit action must derive the local port from that private endpoint and construct the adapter separately.
+Studio's Tauri shell exposes `get_device_bridge_status`, `start_device_bridge` and `stop_device_bridge` for the ephemeral IPv4-loopback listener, plus `get_device_bridge_adb_status`, `choose_device_bridge_adb_executable` and `check_device_bridge_adb` for user-gated preflight. Bridge status returns `stopped`, `waiting` or `connected`; a connected projection contains only device profile, negotiated protocol version and sorted capabilities. Preflight returns only `{ configured, readiness }`; the selected canonical path, ADB serials, raw output, bearer, endpoint URL/port and server session ID remain inside Rust. The picker command accepts no path, and the check command accepts no device or command argument.
 
-Studio does not execute `adb`, discover Android SDK paths or modify the Lyra APK in this milestone. The separate `lyra-adb` crate can launch only an explicitly configured executable through fixed no-shell arguments, but it has no Tauri integration. There is no LAN listener, WebSocket, command, Pack or filesystem endpoint beyond the authenticated `POST /v1/hello` route. Future integrations must remain thin consumers of `lyra-device`, `lyra-adb` and `lyra-dev-server`, preserve these stable codes and receive separate process, transport and Android integration tests.
+Studio launches ADB only after the user explicitly chooses **Check devices**, and only runs `devices -l` through the selected executable. It does not discover Android SDK paths, read environment target selection, create a reverse mapping, modify the Lyra APK, push a Pack or run a background ADB call. There is no LAN listener, WebSocket, command, Pack or filesystem endpoint beyond the authenticated `POST /v1/hello` route. A future explicit reverse action must derive the local port from the private endpoint, own mapping cleanup and receive separate process, transport and Android integration tests.
