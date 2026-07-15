@@ -75,7 +75,7 @@ impl AdbClient for SystemAdb {
 }
 ```
 
-- [ ] **Step 1: Add the package skeleton and write failing private-executor tests.**
+- [x] **Step 1: Add the package skeleton and write failing private-executor tests.**
 
 Add `crates/lyra-adb` to the workspace and create a manifest that depends only on `lyra-device = { path = "../lyra-device" }`. In `lib.rs`, declare `mod adapter;` and re-export `SystemAdb`.
 
@@ -95,13 +95,13 @@ In `adapter.rs`, add a `#[cfg(test)]` module that defines a queue-backed fake ex
 
 Each fake-executor test calls `assert_finished` so any unexpected command fails.
 
-- [ ] **Step 2: Run the crate test to verify the adapter symbols are absent.**
+- [x] **Step 2: Run the crate test to verify the adapter symbols are absent.**
 
 Run: `cargo test -p lyra-adb`
 
 Expected: compilation fails because `SystemAdb`, the internal adapter and its command-executor path do not exist yet.
 
-- [ ] **Step 3: Implement the smallest safe process boundary.**
+- [x] **Step 3: Implement the smallest safe process boundary.**
 
 Implement a crate-private generic `Adapter<E>` that stores an executable `PathBuf` and an executor. The private executor calls:
 
@@ -125,7 +125,7 @@ DeviceDiagnostic::new("device.adb.commandFailed", format!("adb {operation} faile
 
 Build each typed method's exact `OsString` vector before handing it to the executor. Parse rows only after the exact header, skip blank rows, map accepted states to `AdbDeviceState`, reject invalid serials as `device.adb.invalidDeviceList`, and reject every unknown state as `device.adb.unsupportedDeviceState`. Wrap `Adapter<SystemExecutor>` in the public `SystemAdb` without adding automatic discovery or invocation during `from_path`.
 
-- [ ] **Step 4: Verify focused behavior and the new package.**
+- [x] **Step 4: Verify focused behavior and the new package.**
 
 Run:
 
@@ -137,7 +137,7 @@ cargo clippy -p lyra-adb --all-targets -- -D warnings
 
 Expected: all test paths use only the fake executor and every command exits 0.
 
-- [ ] **Step 5: Commit the verified process adapter.**
+- [x] **Step 5: Commit the verified process adapter.**
 
 ```bash
 git add Cargo.toml crates/lyra-adb
@@ -152,6 +152,8 @@ git commit -m "feat(adb): add fixed process adapter"
 - Modify: `docs/architecture/rust-tauri.md`
 - Modify: `docs/design/fake-first-device-core.md`
 - Modify: `docs/design/device-adb-reverse-coordinator.md`
+- Modify: `docs/design/loopback-dev-server.md`
+- Modify: `docs/design/studio-device-bridge.md`
 - Modify: `docs/protocols/dev-bridge-v1.md`
 - Modify: `docs/plans/m3-system-adb-process-adapter.md`
 
@@ -159,15 +161,15 @@ git commit -m "feat(adb): add fixed process adapter"
 - Consumes: Task 1's explicit `SystemAdb` and its stable diagnostics.
 - Produces: a cross-platform test target and documentation that never claims Studio invokes ADB today.
 
-- [ ] **Step 1: Add the package to the portable CI matrix.**
+- [x] **Step 1: Add the package to the portable CI matrix.**
 
 Extend the existing Linux/Windows `cargo test -p ...` command with `-p lyra-adb`. Keep the macOS whole-workspace release gate unchanged.
 
-- [ ] **Step 2: Update the public boundary documentation.**
+- [x] **Step 2: Update the public boundary documentation.**
 
 State that `lyra-adb` is explicit-path, fixed-argv and no-shell; it is fake-executor tested but is not yet wired into Tauri/Studio/Android. Add the four stable process/list diagnostics to Dev Bridge v1 and describe the next integration as an explicit user action, not automatic discovery.
 
-- [ ] **Step 3: Mark Task 1 steps complete and verify document consistency.**
+- [x] **Step 3: Mark Task 1 steps complete and verify document consistency.**
 
 After Task 1 and documentation updates succeed, mark Task 1's five checkboxes `[x]`. Run:
 
@@ -178,7 +180,7 @@ git diff --check
 
 Expected: no new placeholder or whitespace failure.
 
-- [ ] **Step 4: Commit the CI and documentation changes.**
+- [x] **Step 4: Commit the CI and documentation changes.**
 
 ```bash
 git add .github/workflows/ci.yml README.md docs
