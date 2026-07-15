@@ -10,6 +10,7 @@ The project is in active development. The public Pack and Registry contracts, Ru
 - Three-column Studio workspace with theme navigation, an isolated 4032 × 284 scenario preview, Schema-generated controls, minimal CSS patches, undo/redo and diagnostics.
 - Manifest-scoped CSS, HTML and JSON source tabs with find/replace, syntax diagnostics and per-document dirty state.
 - Open, versioned Pack, parameter, scenario, Device Profile and Registry contracts.
+- Better Lyrics Pack manifests carry a safe `entry.themeId`, and signed Registry artifacts repeat it for deterministic Lyra APK installation.
 - Deterministic Theme Pack builder and canonical JSON encoder.
 - Ed25519-signed static Theme Registry designed for direct consumption by the Lyra APK.
 - CLI workflows for validation, packaging, license audits, Registry publication and verification.
@@ -81,6 +82,8 @@ https://anpplex.github.io/lyra-effects-studio/registry-v1.json
 ```
 
 Pull requests run all source, license, security and reproducibility gates without access to production signing material. Tag or manual publication runs receive `LYRA_REGISTRY_PRIVATE_KEY_BASE64` from a protected GitHub Actions secret, create versioned Pack URLs and deploy the signed output to GitHub Pages.
+
+The first publication must also enable the repository's Pages source as **GitHub Actions** and inject the matching Android public key at release build time. See [Registry publishing operations](docs/operations/registry-publishing.md) for the exact setup and rotation steps.
 
 For a local non-production build:
 

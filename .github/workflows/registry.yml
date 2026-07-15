@@ -24,9 +24,28 @@ jobs:
           rustup toolchain install 1.97.0 --profile minimal
           cargo test --workspace
           cargo run -p lyra-effects -- license-audit Registry
+      - name: Check production signing configuration
+        env:
+          LYRA_REGISTRY_PRIVATE_KEY_BASE64: ${{ secrets.LYRA_REGISTRY_PRIVATE_KEY_BASE64 }}
+          LYRA_REGISTRY_ID: ${{ vars.LYRA_REGISTRY_ID || 'org.lyra.effects.official' }}
+          LYRA_REGISTRY_KEY_ID: ${{ vars.LYRA_REGISTRY_KEY_ID || 'lyra-official-v1' }}
+        run: |
+          if [[ -z "${LYRA_REGISTRY_PRIVATE_KEY_BASE64:-}" ]]; then
+            echo "::error::Missing LYRA_REGISTRY_PRIVATE_KEY_BASE64; configure the protected production secret before publishing."
+            exit 78
+          fi
+          if [[ "${LYRA_REGISTRY_ID}" != "org.lyra.effects.official" ]]; then
+            echo "::error::LYRA_REGISTRY_ID must remain org.lyra.effects.official for the Android official trust gate."
+            exit 78
+          fi
+          if [[ "${LYRA_REGISTRY_KEY_ID}" != "lyra-official-v1" ]]; then
+            echo "::error::LYRA_REGISTRY_KEY_ID must remain lyra-official-v1 until a coordinated Android key rotation ships."
+            exit 78
+          fi
       - name: Build signed Registry
         env:
           LYRA_REGISTRY_PRIVATE_KEY_BASE64: ${{ secrets.LYRA_REGISTRY_PRIVATE_KEY_BASE64 }}
+          LYRA_REGISTRY_ID: ${{ vars.LYRA_REGISTRY_ID || 'org.lyra.effects.official' }}
           LYRA_REGISTRY_KEY_ID: ${{ vars.LYRA_REGISTRY_KEY_ID || 'lyra-official-v1' }}
         run: bash Scripts/build-registry.sh .build/registry-site
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5

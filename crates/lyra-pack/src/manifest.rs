@@ -45,6 +45,8 @@ pub struct Compatibility {
 pub struct Entry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub style: Option<String>,
+    #[serde(rename = "themeId", skip_serializing_if = "Option::is_none")]
+    pub theme_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub html: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -114,6 +116,18 @@ impl PackManifest {
                 "capabilities must contain unique values".into(),
             ));
         }
+        if self.family == "better-lyrics" {
+            let Some(theme_id) = self.entry.theme_id.as_deref() else {
+                return Err(PackError::Contract(
+                    "Better Lyrics manifests require entry.themeId".into(),
+                ));
+            };
+            if !is_valid_theme_id(theme_id) {
+                return Err(PackError::Contract(format!(
+                    "invalid Better Lyrics themeId: {theme_id}"
+                )));
+            }
+        }
         Ok(())
     }
 }
@@ -141,6 +155,17 @@ fn is_valid_pack_id(id: &str) -> bool {
                     .bytes()
                     .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
         })
+}
+
+fn is_valid_theme_id(id: &str) -> bool {
+    let bytes = id.as_bytes();
+    bytes.len() <= 64
+        && !bytes.is_empty()
+        && bytes[0] != b'-'
+        && bytes[bytes.len() - 1] != b'-'
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
 }
 
 fn deserialize_schema_version<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {

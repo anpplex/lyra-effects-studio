@@ -81,6 +81,109 @@ fn builds_and_verifies_registry_artifacts_with_supplied_key() {
 }
 
 #[test]
+fn registry_build_script_publishes_better_lyrics_theme_ids() {
+    let output_root = TempDir::new().expect("output root");
+    let site = output_root.path().join("site");
+    let output = bash_command()
+        .arg(bash_path(
+            &repository_root().join("Scripts/build-registry.sh"),
+        ))
+        .arg(bash_path(&site))
+        .env(
+            "LYRA_REGISTRY_PRIVATE_KEY_BASE64",
+            STANDARD.encode([7_u8; 32]),
+        )
+        .env("SOURCE_DATE_EPOCH", "1752451200")
+        .output()
+        .expect("run Registry build script");
+
+    assert!(
+        output.status.success(),
+        "status={:?}\nstdout={}\nstderr={}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let catalog: Value =
+        serde_json::from_slice(&std::fs::read(site.join("registry-v1.json")).expect("catalog"))
+            .expect("catalog JSON");
+    let theme_ids = catalog["packs"]
+        .as_array()
+        .expect("packs")
+        .iter()
+        .map(|pack| {
+            (
+                pack["id"].as_str().expect("pack id"),
+                pack["themeId"].as_str().expect("theme id"),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+
+    assert_eq!(
+        theme_ids,
+        std::collections::BTreeMap::from([
+            ("io.github.better-lyrics.theme-sustain", "sustain",),
+            (
+                "io.github.chengggit.youtube-music-dynamic-theme",
+                "dynamic-background",
+            ),
+            (
+                "io.github.snw-mint.better-lyrics-modern-player",
+                "modern-player",
+            ),
+        ])
+    );
+}
+
+#[test]
+fn registry_build_rejects_better_lyrics_without_a_theme_id() {
+    let output_root = TempDir::new().expect("output root");
+    let catalog_path = output_root.path().join("registry-v1.unsigned.json");
+    let key_path = output_root.path().join("private-key.txt");
+    let catalog = serde_json::json!({
+        "schemaVersion": 1,
+        "registryId": "org.lyra.effects.official",
+        "name": "Official",
+        "generatedAt": "2026-07-14T00:00:00Z",
+        "keyId": "test-key",
+        "packs": [{
+            "id": "org.lyra.effects.one",
+            "name": "One",
+            "family": "better-lyrics",
+            "version": "1.0.0",
+            "manifestUrl": "packs/org.lyra.effects.one/1.0.0/lyra-pack.json",
+            "downloadUrl": "packs/org.lyra.effects.one/1.0.0/pack.lyra-pack.zip",
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "signature": "c2ln",
+            "size": 10,
+            "minimumRuntimeApi": "1.0.0"
+        }]
+    });
+    std::fs::write(
+        &catalog_path,
+        serde_json::to_vec(&catalog).expect("catalog JSON"),
+    )
+    .expect("catalog file");
+    std::fs::write(&key_path, format!("{}\n", STANDARD.encode([7_u8; 32]))).expect("private key");
+
+    let output = run(&[
+        "registry",
+        "build",
+        path(&catalog_path),
+        path(&output_root.path().join("site")),
+        path(&key_path),
+    ]);
+
+    assert_eq!(output.status.code(), Some(70));
+    assert!(
+        response(&output)["message"]
+            .as_str()
+            .expect("diagnostic")
+            .contains("themeId")
+    );
+}
+
+#[test]
 fn usage_errors_are_json_with_exit_code_64() {
     let output = run(&["unknown"]);
 
@@ -120,4 +223,32 @@ fn repository_root() -> PathBuf {
 
 fn path(path: &Path) -> &str {
     path.to_str().expect("UTF-8 path")
+}
+
+#[cfg(windows)]
+fn bash_command() -> Command {
+    let candidates = [
+        Path::new(r"C:\Program Files\Git\bin\bash.exe"),
+        Path::new(r"C:\Program Files\Git\usr\bin\bash.exe"),
+    ];
+    let executable = candidates
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+        .expect("Git for Windows bash.exe");
+    Command::new(executable)
+}
+
+#[cfg(not(windows))]
+fn bash_command() -> Command {
+    Command::new("bash")
+}
+
+#[cfg(windows)]
+fn bash_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+#[cfg(not(windows))]
+fn bash_path(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }

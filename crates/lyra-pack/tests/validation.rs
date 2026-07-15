@@ -44,8 +44,8 @@ fn rejects_script_entry_even_when_the_script_file_is_missing() {
     fs::write(
         fixture.path().join("lyra-pack.json"),
         manifest.replace(
-            "\"entry\":{\"style\":\"theme/lyra.css\"}",
-            "\"entry\":{\"style\":\"theme/lyra.css\",\"script\":\"missing.js\"}",
+            "\"entry\":{\"style\":\"theme/lyra.css\",\"themeId\":\"refine\"}",
+            "\"entry\":{\"style\":\"theme/lyra.css\",\"themeId\":\"refine\",\"script\":\"missing.js\"}",
         ),
     )
     .expect("script manifest");
@@ -151,7 +151,7 @@ fn make_pack(style: &str) -> TempDir {
     fs::create_dir(root.path().join("theme")).expect("theme directory");
     fs::write(root.path().join("theme/lyra.css"), "body {}").expect("style fixture");
     let manifest = format!(
-        r#"{{"schemaVersion":1,"id":"io.github.example.refine","name":"Refine","version":"1.0.0","kind":"theme","family":"better-lyrics","author":{{"name":"Author"}},"license":{{"spdx":"MIT"}},"compatibility":{{"packSchema":">=1 <2","runtimeApi":">=1.0.0 <2.0.0","bridgeApi":">=1.0.0 <2.0.0"}},"entry":{{"style":"{style}"}},"capabilities":["styles"]}}"#
+        r#"{{"schemaVersion":1,"id":"io.github.example.refine","name":"Refine","version":"1.0.0","kind":"theme","family":"better-lyrics","author":{{"name":"Author"}},"license":{{"spdx":"MIT"}},"compatibility":{{"packSchema":">=1 <2","runtimeApi":">=1.0.0 <2.0.0","bridgeApi":">=1.0.0 <2.0.0"}},"entry":{{"style":"{style}","themeId":"refine"}},"capabilities":["styles"]}}"#
     );
     fs::write(root.path().join("lyra-pack.json"), manifest).expect("manifest fixture");
     root

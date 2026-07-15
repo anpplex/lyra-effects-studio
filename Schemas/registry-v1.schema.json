@@ -13,7 +13,20 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "name", "family", "version", "manifestUrl", "downloadUrl", "sha256", "signature", "size", "minimumRuntimeApi"]
+        "required": ["id", "name", "family", "version", "manifestUrl", "downloadUrl", "sha256", "signature", "size", "minimumRuntimeApi"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "family": { "type": "string" },
+          "themeId": { "type": "string", "maxLength": 64, "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$" },
+          "version": { "type": "string" },
+          "manifestUrl": { "type": "string" },
+          "downloadUrl": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "signature": { "type": "string" },
+          "size": { "type": "integer", "minimum": 1 },
+          "minimumRuntimeApi": { "type": "string" }
+        }
       }
     }
   }

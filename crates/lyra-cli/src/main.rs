@@ -383,6 +383,20 @@ fn validate_catalog(catalog: &RegistryCatalog) -> Result<(), String> {
         {
             return Err(format!("invalid Pack checksum: {}", pack.id));
         }
+        if pack.family == "better-lyrics" {
+            match pack.theme_id.as_deref() {
+                Some(theme_id) if is_safe_theme_id(theme_id) => {}
+                Some(theme_id) => {
+                    return Err(format!("invalid Better Lyrics themeId: {theme_id}"));
+                }
+                None => {
+                    return Err(format!(
+                        "Better Lyrics Registry Pack is missing themeId: {}",
+                        pack.id
+                    ));
+                }
+            }
+        }
         safe_relative(&pack.download_url)?;
         safe_relative(&pack.manifest_url)?;
     }
@@ -406,4 +420,14 @@ fn safe_relative(relative: &str) -> Result<(), String> {
     } else {
         Ok(())
     }
+}
+
+fn is_safe_theme_id(id: &str) -> bool {
+    let bytes = id.as_bytes();
+    !bytes.is_empty()
+        && bytes[0] != b'-'
+        && bytes[bytes.len() - 1] != b'-'
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
 }

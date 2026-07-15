@@ -31,7 +31,20 @@ if [[ -z "$KEY_FILE" || ! -f "$KEY_FILE" ]]; then
 fi
 
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git -C "$REPO_ROOT" show -s --format=%ct HEAD)}"
-GENERATED_AT="$(python3 -c 'import datetime,sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]), datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))' "$SOURCE_DATE_EPOCH")"
+PYTHON_BIN="${LYRA_PYTHON_BIN:-}"
+if [[ -z "$PYTHON_BIN" ]]; then
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      PYTHON_BIN="$candidate"
+      break
+    fi
+  done
+fi
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "Python 3 is required to build the Registry timestamp." >&2
+  exit 69
+fi
+GENERATED_AT="$("$PYTHON_BIN" -c 'import datetime,sys; print(datetime.datetime.fromtimestamp(int(sys.argv[1]), datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))' "$SOURCE_DATE_EPOCH")"
 REGISTRY_ID="${LYRA_REGISTRY_ID:-org.lyra.effects.official}"
 REGISTRY_NAME="${LYRA_REGISTRY_NAME:-Lyra Official Effects}"
 KEY_ID="${LYRA_REGISTRY_KEY_ID:-lyra-official-v1}"
@@ -40,6 +53,13 @@ rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR/packs"
 cargo build --manifest-path "$REPO_ROOT/Cargo.toml" --release --bin lyra-effects >/dev/null
 CLI="$REPO_ROOT/target/release/lyra-effects"
+if [[ ! -x "$CLI" && -x "${CLI}.exe" ]]; then
+  CLI="${CLI}.exe"
+fi
+if [[ ! -x "$CLI" ]]; then
+  echo "Built lyra-effects CLI was not found at $CLI (or ${CLI}.exe)." >&2
+  exit 70
+fi
 
 packs='[]'
 for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
@@ -48,6 +68,13 @@ for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
   name="$(jq -er '.name' "$manifest")"
   family="$(jq -er '.family' "$manifest")"
   version="$(jq -er '.version' "$manifest")"
+  theme_id=""
+  if [[ "$family" == "better-lyrics" ]]; then
+    theme_id="$(jq -er '.entry.themeId | strings | select(length <= 64 and test("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"))' "$manifest")" || {
+      echo "Better Lyrics Pack is missing a valid entry.themeId: $manifest" >&2
+      exit 65
+    }
+  fi
   version_dir="$OUTPUT_DIR/packs/$id/$version"
   archive="$version_dir/pack.lyra-pack.zip"
   mkdir -p "$version_dir"
@@ -60,11 +87,11 @@ for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
   cp "$manifest" "$version_dir/lyra-pack.json"
 
   entry="$(jq -cn \
-    --arg id "$id" --arg name "$name" --arg family "$family" --arg version "$version" \
+    --arg id "$id" --arg name "$name" --arg family "$family" --arg version "$version" --arg themeId "$theme_id" \
     --arg manifestUrl "packs/$id/$version/lyra-pack.json" \
     --arg downloadUrl "packs/$id/$version/pack.lyra-pack.zip" \
     --arg sha256 "$sha256" --arg signature "$signature" --argjson size "$size" \
-    '{id:$id,name:$name,family:$family,version:$version,manifestUrl:$manifestUrl,downloadUrl:$downloadUrl,sha256:$sha256,signature:$signature,size:$size,minimumRuntimeApi:"1.0.0"}')"
+    '{id:$id,name:$name,family:$family,version:$version} + (if $themeId == "" then {} else {themeId:$themeId} end) + {manifestUrl:$manifestUrl,downloadUrl:$downloadUrl,sha256:$sha256,signature:$signature,size:$size,minimumRuntimeApi:"1.0.0"}')"
   packs="$(jq -cn --argjson packs "$packs" --argjson entry "$entry" '$packs + [$entry]')"
 done
 
