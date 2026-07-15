@@ -21,7 +21,7 @@ impl DeviceDiagnostic {
         }
     }
 
-    fn with_code(code: &str, message: impl Into<String>) -> Self {
+    pub(crate) fn with_code(code: &str, message: impl Into<String>) -> Self {
         Self {
             code: code.into(),
             message: message.into(),
