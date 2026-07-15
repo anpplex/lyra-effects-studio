@@ -126,11 +126,11 @@ impl PackValidator {
                     "Theme Packs cannot contain JavaScript",
                 ));
             }
-            if is_executable(&metadata) {
+            if is_executable(path, &metadata) {
                 diagnostics.push(Diagnostic::new(
                     "file.executableForbidden",
                     path.strip_prefix(root).ok(),
-                    "Pack files cannot be executable",
+                    "Pack files cannot be executable or use executable extensions",
                 ));
             }
         }
@@ -175,14 +175,42 @@ fn validate_reference(root: &Path, reference: &str, diagnostics: &mut Vec<Diagno
     }
 }
 
+fn is_executable(path: &Path, metadata: &fs::Metadata) -> bool {
+    has_executable_extension(path) || has_executable_mode(metadata)
+}
+
+fn has_executable_extension(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "appimage"
+                    | "apk"
+                    | "bash"
+                    | "bat"
+                    | "cmd"
+                    | "com"
+                    | "exe"
+                    | "fish"
+                    | "jar"
+                    | "msi"
+                    | "ps1"
+                    | "scr"
+                    | "sh"
+                    | "zsh"
+            )
+        })
+}
+
 #[cfg(unix)]
-fn is_executable(metadata: &fs::Metadata) -> bool {
+fn has_executable_mode(metadata: &fs::Metadata) -> bool {
     use std::os::unix::fs::PermissionsExt;
 
     metadata.permissions().mode() & 0o111 != 0
 }
 
 #[cfg(not(unix))]
-fn is_executable(_metadata: &fs::Metadata) -> bool {
+fn has_executable_mode(_metadata: &fs::Metadata) -> bool {
     false
 }
