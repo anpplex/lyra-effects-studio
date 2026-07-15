@@ -63,7 +63,6 @@ pub(crate) struct AdbPreflightStatus {
     readiness: AdbPreflightReadiness,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum DevBridgeMappingReadiness {
@@ -74,7 +73,6 @@ pub(crate) enum DevBridgeMappingReadiness {
     CleanupFailed,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DevBridgeMappingStatus {
@@ -100,16 +98,13 @@ struct AdbPreflightState {
     mapping: MappingState,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 struct ActiveMapping {
     mapping: ReverseMapping,
     adb: Box<dyn AdbClient + Send>,
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 type SharedActiveMapping = Arc<StdMutex<ActiveMapping>>;
 
-#[cfg_attr(not(test), allow(dead_code))]
 enum MappingState {
     Inactive,
     Enabling,
@@ -233,13 +228,11 @@ impl DeviceBridgeController {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) async fn mapping_status(&self) -> DevBridgeMappingStatus {
         let preflight = self.adb_preflight.lock().await;
         mapping_status_from_state(&preflight.mapping)
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) async fn enable_mapping(&self) -> Result<DevBridgeMappingStatus, DeviceDiagnostic> {
         let _operation = self.mapping_operation.lock().await;
         let local_port = {
@@ -287,7 +280,6 @@ impl DeviceBridgeController {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) async fn disable_mapping(&self) -> Result<DevBridgeMappingStatus, DeviceDiagnostic> {
         let _operation = self.mapping_operation.lock().await;
         self.remove_mapping_with_operation().await
@@ -370,7 +362,6 @@ fn invalid_executable() -> DeviceDiagnostic {
     )
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 fn bridge_not_running() -> DeviceDiagnostic {
     DeviceDiagnostic::new(
         "device.bridge.notRunning",
