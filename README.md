@@ -17,8 +17,14 @@ The project is in active development. The public Pack and Registry contracts, Ru
 
 ## Requirements
 
-- Rust 1.97 through `rustup` (the repository pins the exact toolchain)
-- Xcode Command Line Tools on macOS; the platform linker/build tools on Windows or Linux
+- Rust 1.97 through `rustup` (the repository pins the exact toolchain).
+- Node.js 24 and npm for the Studio frontend and Tauri CLI.
+- Platform tools for desktop builds:
+  - macOS 14+: Xcode Command Line Tools; full Xcode is only required for mobile targets.
+  - Windows 10+: Microsoft C++ Build Tools and Microsoft Edge WebView2.
+  - Debian/Ubuntu Linux: `libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`.
+
+The package list follows the [official Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/). Rust core, CLI and frontend checks run on macOS, Windows and Linux in CI. The signed desktop release remains macOS-first; CI currently produces an unsigned macOS debug `.app` as the bundle gate.
 
 ## Build
 
@@ -37,6 +43,12 @@ npm run studio:lint
 npm run studio:test
 npm run studio:build
 npx tauri build --debug --no-bundle
+```
+
+To build the same macOS application bundle used by CI:
+
+```sh
+npx tauri build --debug --bundles app
 ```
 
 For browser-based UI development, run `npm run studio:dev`. Browser mode uses an in-memory fake backend; the Tauri build opens real standalone Packs or repo-bound `lyric-effects` projects through a native directory picker.
@@ -79,6 +91,8 @@ cargo run -p lyra-effects -- registry verify-site /tmp/lyra-registry
 ```
 
 See [Registry/README.md](Registry/README.md) for contribution evidence and [docs/security/reproducibility.md](docs/security/reproducibility.md) for the signed reproducibility model.
+
+See [Rust/Tauri architecture](docs/architecture/rust-tauri.md) for platform boundaries, migration status and the CI support matrix.
 
 ## License
 

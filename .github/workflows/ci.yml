@@ -10,9 +10,17 @@ permissions:
 
 jobs:
   test:
+    name: macOS release gate
     runs-on: macos-26
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/studio/package-lock.json
       - name: Install frontend dependencies
         run: |
           npm ci
@@ -42,3 +50,42 @@ jobs:
         run: find Registry Schemas Fixtures -name '*.json' -print0 | xargs -0 -n1 python3 -m json.tool >/dev/null
       - name: Verify reproducible Registry
         run: bash Scripts/verify-reproducible.sh
+      - name: Build unsigned macOS app bundle
+        run: npx tauri build --debug --bundles app
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: lyra-effects-studio-macos-debug
+          path: target/debug/bundle/macos/*.app
+          if-no-files-found: error
+
+  cross-platform:
+    name: Core + frontend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/studio/package-lock.json
+      - name: Toolchain
+        run: rustup toolchain install 1.97.0 --profile minimal
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm ci --prefix apps/studio
+      - name: Validate frontend
+        run: |
+          npm run studio:lint
+          npm run studio:test
+          npm run studio:build
+      - name: Test portable Rust core and CLI
+        run: cargo test -p lyra-pack -p lyra-project -p lyra-registry -p lyra-effects
+      - name: Build release CLI
+        run: cargo build -p lyra-effects --release
