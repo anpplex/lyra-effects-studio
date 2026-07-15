@@ -1,6 +1,27 @@
+use crate::ServerDiagnostic;
+
 pub(crate) struct BridgeToken([u8; 32]);
 
+impl Clone for BridgeToken {
+    fn clone(&self) -> Self {
+        Self(self.0)
+    }
+}
+
 impl BridgeToken {
+    /// Generates a token from the operating system random source.
+    ///
+    /// # Errors
+    ///
+    /// Returns `device.bridge.tokenGenerationFailed` when random bytes are unavailable.
+    pub(crate) fn generate() -> Result<Self, ServerDiagnostic> {
+        let mut bytes = [0_u8; 32];
+        getrandom::fill(&mut bytes).map_err(|error| {
+            ServerDiagnostic::new("device.bridge.tokenGenerationFailed", error.to_string())
+        })?;
+        Ok(Self(bytes))
+    }
+
     #[cfg(test)]
     pub(crate) const fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
@@ -8,6 +29,12 @@ impl BridgeToken {
 
     pub(crate) fn authorization_value(&self) -> String {
         format!("Bearer {}", hex(&self.0))
+    }
+
+    pub(crate) fn matches_authorization(&self, value: Option<&axum::http::HeaderValue>) -> bool {
+        value
+            .and_then(|header| header.to_str().ok())
+            .is_some_and(|header| header == self.authorization_value())
     }
 }
 

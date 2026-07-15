@@ -1,12 +1,14 @@
 #![doc = "Authenticated loopback Dev Bridge server for Lyra Effects Studio."]
 
 mod diagnostic;
+mod server;
 mod token;
 
 use std::fmt;
 use std::net::SocketAddr;
 
 pub use diagnostic::ServerDiagnostic;
+pub use server::DevServer;
 
 use token::BridgeToken;
 
@@ -17,6 +19,10 @@ pub struct DevServerEndpoint {
 }
 
 impl DevServerEndpoint {
+    pub(crate) const fn new(address: SocketAddr, token: BridgeToken) -> Self {
+        Self { address, token }
+    }
+
     #[must_use]
     /// Returns the IPv4 loopback listener address.
     pub const fn address(&self) -> SocketAddr {
