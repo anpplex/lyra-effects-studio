@@ -5,6 +5,7 @@ members = [
     "crates/lyra-project",
     "crates/lyra-registry",
     "crates/lyra-device",
+    "crates/lyra-adb",
     "crates/lyra-dev-server",
     "crates/lyra-cli",
     "src-tauri",
