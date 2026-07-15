@@ -1,5 +1,6 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type { ParameterSchema } from "../studio/parameterEditor";
+import type { PreviewScenario } from "../studio/previewDocument";
 
 export interface AppInfo {
   appVersion: string;
@@ -18,6 +19,7 @@ export interface EditablePack {
   styleSource: string;
   styleSha256: string;
   parameters?: ParameterSchema | null;
+  scenarios?: PreviewScenario[];
   documents?: EditableDocument[];
 }
 
@@ -122,6 +124,16 @@ const fixtureProject: ProjectSnapshot = {
           },
         ],
       },
+      scenarios: [
+        {
+          schemaVersion: 1,
+          id: "org.lyra.scenario.midnight-galaxy",
+          track: { title: "Midnight Galaxy", artist: "Future Echoes" },
+          lyrics: [{ startMilliseconds: 0, endMilliseconds: 4000, text: "星河在此刻为你闪烁", translation: "The galaxy is shimmering for you" }],
+          events: [],
+          expectedDiagnostics: [],
+        },
+      ],
       documents: [
         {
           id: "style",
@@ -138,7 +150,7 @@ const fixtureProject: ProjectSnapshot = {
           kind: "html",
           path: "/browser-fixture/future-lyrics/sustain/theme/index.html",
           relativePath: "theme/index.html",
-          source: "<main id=\"blyrics-wrapper\"></main>\n",
+          source: "<main class=\"lyra-blyrics-stage\"><section class=\"lyra-track\"><div class=\"lyra-art\">LYRA</div><div class=\"lyra-meta\"><strong data-lyra-track-title></strong><span data-lyra-track-artist></span></div></section><section id=\"blyrics-wrapper\" class=\"lyra-blyrics-viewport\"></section></main>\n",
           sha256: "fixture-html",
         },
         {
@@ -149,6 +161,15 @@ const fixtureProject: ProjectSnapshot = {
           relativePath: "parameters.json",
           source: "{\n  \"schemaVersion\": 1,\n  \"groups\": []\n}\n",
           sha256: "fixture-parameters",
+        },
+        {
+          id: "scenario-0",
+          label: "Scenario 1",
+          kind: "json",
+          path: "/browser-fixture/future-lyrics/sustain/scenarios/midnight-galaxy.json",
+          relativePath: "scenarios/midnight-galaxy.json",
+          source: "{\n  \"schemaVersion\": 1,\n  \"id\": \"org.lyra.scenario.midnight-galaxy\",\n  \"track\": { \"title\": \"Midnight Galaxy\", \"artist\": \"Future Echoes\" },\n  \"lyrics\": [{ \"startMilliseconds\": 0, \"endMilliseconds\": 4000, \"text\": \"星河在此刻为你闪烁\", \"translation\": \"The galaxy is shimmering for you\" }],\n  \"events\": []\n}\n",
+          sha256: "fixture-scenario",
         },
       ],
     },

@@ -24,6 +24,7 @@ import {
   type ProjectSession,
 } from "./studio/projectSession";
 import type { ParameterDefinition, ParameterValue } from "./studio/parameterEditor";
+import { buildPreviewDocument, DEFAULT_PREVIEW_SCENARIO, parsePreviewScenarioDocument } from "./studio/previewDocument";
 import { diagnoseSourceDocument, findSourceMatches, replaceAllSourceMatches } from "./studio/sourceWorkspace";
 
 type NumericParameter = Exclude<keyof StudioParameters, "showSafeArea">;
@@ -172,6 +173,12 @@ function sourceOffset(source: string, line: number, column: number): number {
     + Math.max(0, column - 1);
 }
 
+function createPreviewNonce(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
 function App() {
   const [state, setState] = useState(createStudioState);
   const [search, setSearch] = useState("");
@@ -181,7 +188,9 @@ function App() {
   const [sourceFind, setSourceFind] = useState("");
   const [sourceReplace, setSourceReplace] = useState("");
   const [sourceCaseSensitive, setSourceCaseSensitive] = useState(false);
+  const [previewNonce] = useState(createPreviewNonce);
   const sourceEditorRef = useRef<HTMLTextAreaElement>(null);
+  const previewFrameRef = useRef<HTMLIFrameElement>(null);
 
   const selectedPack = state.packs.find((pack) => pack.id === state.selectedPackId)!;
   const selectedTheme = selectedPack.themes.find((theme) => theme.id === state.selectedThemeId)!;
@@ -199,6 +208,44 @@ function App() {
   const sourceDiagnostics = useMemo(() => projectSession
     ? diagnoseSourceDocument(projectSession.activeDocument)
     : [], [projectSession]);
+  const activeScenario = useMemo(() => {
+    const declared = projectSession?.activePack.scenarios ?? [];
+    const index = Math.max(0, declared.findIndex((scenario) => scenario.id === state.preview.scenarioId));
+    const source = projectSession?.sourceWorkspace.documents.find((document) => document.id === `scenario-${index}`)?.draftSource;
+    return (source ? parsePreviewScenarioDocument(source) : undefined)
+      ?? declared[index]
+      ?? DEFAULT_PREVIEW_SCENARIO;
+  }, [projectSession, state.preview.scenarioId]);
+  const previewDocument = useMemo(() => {
+    if (!projectSession) return undefined;
+    const style = projectSession.sourceWorkspace.documents.find((document) => document.id === "style");
+    const html = projectSession.sourceWorkspace.documents.find((document) => document.id === "html");
+    return buildPreviewDocument({
+      css: style?.draftSource ?? projectSession.activePack.styleSource,
+      html: html?.draftSource.trim() ? html.draftSource : undefined,
+      scenario: activeScenario,
+      mode: state.preview.mode,
+      playing: state.preview.playing,
+      nonce: previewNonce,
+    });
+  }, [activeScenario, previewNonce, projectSession, state.preview.mode, state.preview.playing]);
+
+  useEffect(() => {
+    const receivePreviewEvent = (event: MessageEvent) => {
+      if (event.source !== previewFrameRef.current?.contentWindow) return;
+      const payload = event.data as { source?: unknown; token?: unknown; type?: unknown; message?: unknown };
+      if (payload?.source !== "lyra-preview" || payload.token !== previewNonce || typeof payload.message !== "string") return;
+      const level = payload.type === "error" ? "error" : payload.type === "warning" ? "warning" : "info";
+      const id = `preview-${String(payload.type)}`;
+      const time = new Date().toLocaleTimeString("en-GB", { hour12: false });
+      setState((current) => ({
+        ...current,
+        diagnostics: [...current.diagnostics.filter((item) => item.id !== id), { id, level, message: payload.message as string, time }],
+      }));
+    };
+    window.addEventListener("message", receivePreviewEvent);
+    return () => window.removeEventListener("message", receivePreviewEvent);
+  }, [previewNonce]);
 
   const handleParameter = (key: NumericParameter, value: number) => {
     setState((current) => updateParameter(current, key, value));
@@ -279,7 +326,17 @@ function App() {
       const firstTheme = firstPack?.themes[0];
       if (!firstPack || !firstTheme) throw new Error("The project does not contain an editable Theme Pack");
       setProjectSession(session);
-      setState((current) => ({ ...current, packs, selectedPackId: firstPack.id, selectedThemeId: firstTheme.id, inspectorTab: "source" }));
+      setState((current) => ({
+        ...current,
+        packs,
+        selectedPackId: firstPack.id,
+        selectedThemeId: firstTheme.id,
+        inspectorTab: "source",
+        preview: {
+          ...current.preview,
+          scenarioId: session.activePack.scenarios?.[0]?.id ?? current.preview.scenarioId,
+        },
+      }));
     } catch (error) {
       setProjectError(error instanceof Error ? error.message : String(error));
     }
@@ -310,6 +367,7 @@ function App() {
         </div>
         <div className="app-toolbar">
           <label className="select-control"><span className="sr-only">Device profile</span><select defaultValue="avatr-cluster-4032x284"><option value="avatr-cluster-4032x284">Avatr Cluster · 4032 × 284</option><option value="browser-responsive">Responsive browser</option></select></label>
+          {projectSession && <label className="select-control scenario-control"><span className="sr-only">Preview scenario</span><select data-testid="scenario-select" value={activeScenario.id} onChange={(event) => setState((current) => ({ ...current, preview: { ...current.preview, scenarioId: event.currentTarget.value } }))}>{(projectSession.activePack.scenarios?.length ? projectSession.activePack.scenarios : [DEFAULT_PREVIEW_SCENARIO]).map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.track.title}</option>)}</select></label>}
           <div className="segmented" aria-label="Preview appearance">
             <button data-testid="mode-day" className={state.preview.mode === "day" ? "active" : ""} aria-pressed={state.preview.mode === "day"} onClick={() => setState((current) => setPreviewMode(current, "day"))}><Icon name="sun" />Day</button>
             <button data-testid="mode-night" className={state.preview.mode === "night" ? "active" : ""} aria-pressed={state.preview.mode === "night"} onClick={() => setState((current) => setPreviewMode(current, "night"))}><Icon name="moon" />Night</button>
@@ -348,9 +406,11 @@ function App() {
             <div className="device-label"><i />AVATR CLUSTER / MAIN DISPLAY</div>
             <div className="cluster-frame">
               <div className="cluster-screen" data-testid="preview-canvas" style={previewStyle}>
-                <div className="ambient-orbit orbit-one" /><div className="ambient-orbit orbit-two" />
-                <div className="album-block"><div className="album-art"><span>LYRA</span></div><div className="track-meta"><strong>Midnight Galaxy</strong><span>Future Echoes</span></div></div>
-                <div className="lyric-zone"><p className="previous-line">We were chasing light through the silence</p><p className="current-line">星河在此刻为你闪烁</p><p className="translation-line">The galaxy is shimmering for you</p></div>
+                {previewDocument ? <iframe ref={previewFrameRef} data-testid="preview-frame" className="preview-frame" title="Isolated Lyra theme preview" sandbox="allow-scripts" srcDoc={previewDocument} /> : <>
+                  <div className="ambient-orbit orbit-one" /><div className="ambient-orbit orbit-two" />
+                  <div className="album-block"><div className="album-art"><span>LYRA</span></div><div className="track-meta"><strong>Midnight Galaxy</strong><span>Future Echoes</span></div></div>
+                  <div className="lyric-zone"><p className="previous-line">We were chasing light through the silence</p><p className="current-line">星河在此刻为你闪烁</p><p className="translation-line">The galaxy is shimmering for you</p></div>
+                </>}
                 {state.parameters.showSafeArea && <div className="safe-area" data-testid="safe-area"><span>safe area</span></div>}
                 <div className="progress-line"><span style={{ width: state.preview.playing ? "62%" : "38%" }} /></div>
               </div>

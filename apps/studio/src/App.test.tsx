@@ -69,4 +69,37 @@ describe("Studio workspace", () => {
     await user.paste("{");
     expect(await screen.findByTestId("source-diagnostic")).toHaveTextContent("JSON");
   });
+
+  it("renders project themes inside an opaque-origin scenario preview", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><App /></StrictMode>);
+
+    await user.click(screen.getByTestId("open-project"));
+    const frame = await screen.findByTestId("preview-frame");
+
+    expect(frame).toHaveAttribute("sandbox", "allow-scripts");
+    expect(frame).not.toHaveAttribute("sandbox", expect.stringContaining("allow-same-origin"));
+    expect(frame.getAttribute("srcdoc")).toContain("default-src 'none'");
+    expect(frame.getAttribute("srcdoc")).toContain("Midnight Galaxy");
+    expect(frame.getAttribute("srcdoc")).toContain("window.lyraBridge");
+  });
+
+  it("refreshes the preview from an edited scenario document", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><App /></StrictMode>);
+
+    await user.click(screen.getByTestId("open-project"));
+    await user.click(await screen.findByTestId("source-document-scenario-0"));
+    const editor = screen.getByTestId("source-editor");
+    await user.clear(editor);
+    await user.paste(JSON.stringify({
+      schemaVersion: 1,
+      id: "org.lyra.scenario.midnight-galaxy",
+      track: { title: "Edited in Studio", artist: "Future Echoes" },
+      lyrics: [{ startMilliseconds: 0, endMilliseconds: 4000, text: "即时预览" }],
+      events: [],
+    }));
+
+    expect(screen.getByTestId("preview-frame").getAttribute("srcdoc")).toContain("Edited in Studio");
+  });
 });

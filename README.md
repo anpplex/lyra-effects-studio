@@ -7,7 +7,7 @@ The project is in active development. The public Pack and Registry contracts, Ru
 ## What is included
 
 - Cross-platform Rust workspace shared by the CLI and Tauri 2 desktop application.
-- Three-column Studio workspace with theme navigation, a true-ratio 4032 × 284 preview, Schema-generated controls, minimal CSS patches, undo/redo and diagnostics.
+- Three-column Studio workspace with theme navigation, an isolated 4032 × 284 scenario preview, Schema-generated controls, minimal CSS patches, undo/redo and diagnostics.
 - Manifest-scoped CSS, HTML and JSON source tabs with find/replace, syntax diagnostics and per-document dirty state.
 - Open, versioned Pack, parameter, scenario, Device Profile and Registry contracts.
 - Deterministic Theme Pack builder and canonical JSON encoder.
@@ -42,6 +42,8 @@ npx tauri build --debug --no-bundle
 For browser-based UI development, run `npm run studio:dev`. Browser mode uses an in-memory fake backend; the Tauri build opens real standalone Packs or repo-bound `lyric-effects` projects through a native directory picker.
 
 Real saves are limited to editable entries declared by the Pack manifest, written through a temporary file and protected by a SHA-256 conflict check. CSS, HTML, parameter JSON and scenario JSON are loaded as separate documents; JSON contracts are validated again before persistence. Theme scripts are never exposed by the source workspace. When a Pack declares `parameters`, Studio validates that Schema and generates color, length/number, select, toggle and text controls without theme-specific application code. See [project filesystem security](docs/security/project-filesystem.md).
+
+Preview content runs in an opaque-origin iframe with a deny-by-default Content Security Policy. Studio injects a nonce-bound read-only Mock Bridge, scales a logical 4032 × 284 canvas to the available viewport, and reports bridge, runtime and policy events back through a token-checked message channel. Editing declared CSS, HTML or scenario JSON refreshes this preview without a save/reopen cycle. See [preview sandbox security](docs/security/preview-sandbox.md).
 
 ## CLI
 
