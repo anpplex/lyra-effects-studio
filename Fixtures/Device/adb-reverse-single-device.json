@@ -1,0 +1,23 @@
+{
+  "steps": [
+    {
+      "operation": "listDevices",
+      "result": {
+        "devices": [{ "serial": "AVATR-CLUSTER-01", "state": "device" }]
+      }
+    },
+    {
+      "operation": "reverse",
+      "serial": "AVATR-CLUSTER-01",
+      "localPort": 49321,
+      "remotePort": 49321,
+      "result": {}
+    },
+    {
+      "operation": "removeReverse",
+      "serial": "AVATR-CLUSTER-01",
+      "remotePort": 49321,
+      "result": {}
+    }
+  ]
+}
