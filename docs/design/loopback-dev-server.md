@@ -35,7 +35,7 @@ The first accepted hello creates the session. Repeating the same `deviceProfileI
 - The 32-byte token is generated from the operating system random source, encoded as lowercase hexadecimal and never included in response bodies, diagnostics or `Debug` output.
 - `POST /v1/hello` requires an exact `Authorization: Bearer` token. Missing or invalid credentials return HTTP 401 with `device.bridge.unauthorized`.
 - JSON requests are capped at 16 KiB. Malformed, unsupported or oversized requests return a structured `device.bridge.invalidRequest` diagnostic without creating a session.
-- Negotiation errors retain their portable `device.protocol.*` or `device.capability.*` codes and return HTTP 422.
+- Malformed hello request bodies are normalized to `device.bridge.invalidRequest`; negotiation failures retain their portable `device.protocol.*` or `device.capability.*` codes and return HTTP 422.
 - A hello for another device profile returns HTTP 409 with `device.bridge.sessionActive`; the existing session is preserved.
 - The server exposes no arbitrary command, filesystem, Pack, ADB, network forwarding or theme mutation endpoint.
 - `DevServer::shutdown` is explicit and graceful. Dropping the endpoint alone must not be treated as shutdown.

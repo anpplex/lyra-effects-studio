@@ -1,8 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{Request, State};
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
@@ -50,7 +49,6 @@ impl DevServer {
         });
         let router = Router::new()
             .route("/v1/hello", post(hello))
-            .layer(axum::extract::DefaultBodyLimit::max(MAX_HELLO_BYTES))
             .with_state(Arc::clone(&state));
         let (shutdown, shutdown_signal) = oneshot::channel();
         let task = tokio::spawn(async move {
@@ -131,9 +129,18 @@ impl SessionSnapshot {
 
 async fn hello(
     State(state): State<Arc<ServerState>>,
-    headers: HeaderMap,
-    body: Bytes,
+    request: Request,
 ) -> Result<Json<SessionSnapshot>, ApiError> {
+    let headers = request.headers().clone();
+    let body = axum::body::to_bytes(request.into_body(), MAX_HELLO_BYTES)
+        .await
+        .map_err(|error| {
+            ApiError::new(
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "device.bridge.invalidRequest",
+                &format!("hello request exceeds the 16 KiB limit: {error}"),
+            )
+        })?;
     if !state
         .token
         .matches_authorization(headers.get(AUTHORIZATION))
@@ -152,8 +159,13 @@ async fn hello(
         ));
     }
 
-    let hello = DeviceHello::from_slice(&body)
-        .map_err(|error| ApiError::from_device(StatusCode::BAD_REQUEST, error))?;
+    let hello = DeviceHello::from_slice(&body).map_err(|error| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "device.bridge.invalidRequest",
+            &error.message,
+        )
+    })?;
     if let Some(snapshot) = state.snapshot_for_profile(&hello.device_profile_id).await? {
         return Ok(Json(snapshot));
     }

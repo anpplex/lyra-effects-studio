@@ -6,7 +6,15 @@ use tokio::net::TcpStream;
 
 struct Response {
     status: u16,
-    json: Value,
+    json: Option<Value>,
+}
+
+impl Response {
+    fn json_value(&self) -> &Value {
+        self.json
+            .as_ref()
+            .expect("response must include a JSON diagnostic envelope")
+    }
 }
 
 #[tokio::test]
@@ -56,10 +64,13 @@ async fn hello_creates_a_snapshot_with_the_negotiated_intersection() {
     let accepted = send_authorized_hello(&endpoint, hello_fixture()).await;
     assert_eq!(accepted.status, 200);
     assert_eq!(
-        accepted.json["capabilities"],
+        accepted.json_value()["capabilities"],
         serde_json::json!(["activate", "stageRevision"])
     );
-    assert_eq!(accepted.json["sessionId"].as_str().unwrap().len(), 32);
+    assert_eq!(
+        accepted.json_value()["sessionId"].as_str().unwrap().len(),
+        32
+    );
     let snapshot = server.session_snapshot().await.unwrap();
     assert_eq!(snapshot.device_profile_id, "com.avatr.cluster.4032x284");
     assert_eq!(snapshot.capabilities, ["activate", "stageRevision"]);
@@ -74,7 +85,10 @@ async fn same_profile_reconnect_is_idempotent_but_another_profile_is_rejected() 
     let first = send_authorized_hello(&endpoint, hello_fixture()).await;
     let repeat = send_authorized_hello(&endpoint, hello_fixture()).await;
     assert_eq!(first.status, 200);
-    assert_eq!(first.json["sessionId"], repeat.json["sessionId"]);
+    assert_eq!(
+        first.json_value()["sessionId"],
+        repeat.json_value()["sessionId"]
+    );
 
     let another_profile = hello_with_profile("other.profile");
     let conflict = send_authorized_hello(&endpoint, &another_profile).await;
@@ -85,6 +99,44 @@ async fn same_profile_reconnect_is_idempotent_but_another_profile_is_rejected() 
     );
 
     server.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn malformed_or_oversized_hello_never_creates_a_session() {
+    let (server, endpoint) = start_test_server().await;
+    let authorization = endpoint.authorization_value();
+
+    let malformed = send_request(
+        &endpoint,
+        Some(&authorization),
+        "application/json",
+        b"{not-json",
+    )
+    .await;
+    assert_response(&malformed, 400, "device.bridge.invalidRequest");
+
+    let oversized = vec![b' '; 16 * 1024 + 1];
+    let too_large = send_request(
+        &endpoint,
+        Some(&authorization),
+        "application/json",
+        &oversized,
+    )
+    .await;
+    assert_response(&too_large, 413, "device.bridge.invalidRequest");
+    assert!(server.session_snapshot().await.is_none());
+
+    server.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn shutdown_stops_the_loopback_listener() {
+    let (server, endpoint) = start_test_server().await;
+    let address = endpoint.address();
+
+    server.shutdown().await.unwrap();
+
+    assert!(TcpStream::connect(address).await.is_err());
 }
 
 async fn start_test_server() -> (DevServer, DevServerEndpoint) {
@@ -169,11 +221,11 @@ fn decode_response(raw: &[u8]) -> Response {
         .unwrap()
         .parse::<u16>()
         .unwrap();
-    let json = serde_json::from_slice(&raw[separator + 4..]).unwrap();
+    let json = serde_json::from_slice(&raw[separator + 4..]).ok();
     Response { status, json }
 }
 
 fn assert_response(response: &Response, status: u16, code: &str) {
     assert_eq!(response.status, status);
-    assert_eq!(response.json["code"], code);
+    assert_eq!(response.json_value()["code"], code);
 }

@@ -2,7 +2,7 @@
 
 Lyra Effects Studio is a cross-platform editor, previewer, device debugger, and signed Theme Registry toolchain for [Lyra](https://github.com/anpplex/Lyra) lyric effects. macOS is the first desktop release target; the Rust core and CLI are designed for macOS, Windows, and Linux.
 
-The project is in active development. The public Pack and Registry contracts, Rust CLI, Tauri shell, interactive Studio workspace, schema-driven editing, conflict-safe project persistence and fake-first Dev Bridge core are available. Real ADB process and Android runtime adapters remain a later integration milestone.
+The project is in active development. The public Pack and Registry contracts, Rust CLI, Tauri shell, interactive Studio workspace, schema-driven editing, conflict-safe project persistence and an authenticated loopback Dev Bridge are available. Real ADB process and Android runtime adapters remain a later integration milestone.
 
 ## What is included
 
@@ -13,7 +13,7 @@ The project is in active development. The public Pack and Registry contracts, Ru
 - Deterministic Theme Pack builder and canonical JSON encoder.
 - Ed25519-signed static Theme Registry designed for direct consumption by the Lyra APK.
 - CLI workflows for validation, packaging, license audits, Registry publication and verification.
-- A portable Dev Bridge protocol, capability negotiation, revision lifecycle and typed FakeADB transcript runner for device workflows without physical hardware.
+- A portable Dev Bridge protocol, capability negotiation, revision lifecycle, typed FakeADB transcript runner and authenticated loopback hello server for device workflows without physical hardware.
 - Three license-cleared Lyra-adapted themes; the complete 18-theme audit remains machine-readable.
 
 ## Requirements
