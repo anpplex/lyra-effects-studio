@@ -3,14 +3,15 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use lyra_pack::{PackManifest, sha256_hex};
-use lyra_project::{ProjectDetector, ProjectMode};
+use lyra_project::{ParameterSchema, ProjectDetector, ProjectMode};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use walkdir::WalkDir;
 
 const MAX_EDITABLE_SOURCE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_PARAMETER_SCHEMA_BYTES: usize = 512 * 1024;
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct EditablePack {
     id: String,
@@ -21,9 +22,10 @@ pub(crate) struct EditablePack {
     style_path: PathBuf,
     style_source: String,
     style_sha256: String,
+    parameters: Option<ParameterSchema>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ProjectSnapshot {
     root: PathBuf,
@@ -134,6 +136,11 @@ fn load_editable_pack(effects_root: &Path, manifest_path: &Path) -> Result<Edita
     }
     let style_source = String::from_utf8(style_bytes.clone())
         .map_err(|_| "Style source must be valid UTF-8".to_owned())?;
+    let parameters = manifest
+        .parameters
+        .as_deref()
+        .map(|relative| load_parameter_schema(&pack_root, relative))
+        .transpose()?;
 
     Ok(EditablePack {
         id: manifest.id,
@@ -144,7 +151,34 @@ fn load_editable_pack(effects_root: &Path, manifest_path: &Path) -> Result<Edita
         style_path,
         style_source,
         style_sha256: sha256_hex(&style_bytes),
+        parameters,
     })
+}
+
+fn load_parameter_schema(pack_root: &Path, relative: &str) -> Result<ParameterSchema, String> {
+    let path = pack_root
+        .join(relative)
+        .canonicalize()
+        .map_err(|error| format!("failed to resolve parameter schema: {error}"))?;
+    if !path.starts_with(pack_root) {
+        return Err("Parameter schema escapes the Pack root".into());
+    }
+    let bytes =
+        fs::read(&path).map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    if bytes.len() > MAX_PARAMETER_SCHEMA_BYTES {
+        return Err("Parameter schema exceeds the 512 KiB limit".into());
+    }
+    let schema = ParameterSchema::from_slice(&bytes).map_err(|error| error.to_string())?;
+    let diagnostics = schema.validate();
+    if !diagnostics.is_empty() {
+        let codes = diagnostics
+            .iter()
+            .map(|item| item.code.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(format!("Parameter schema validation failed: {codes}"));
+    }
+    Ok(schema)
 }
 
 fn save_style(request: &SaveStyleRequest) -> Result<SaveStyleResult, String> {
@@ -213,6 +247,12 @@ mod tests {
             ":root { --lyra-size: 42px; }\n"
         );
         assert_eq!(snapshot.packs[0].style_sha256.len(), 64);
+        let parameters = snapshot.packs[0]
+            .parameters
+            .as_ref()
+            .expect("parameter schema");
+        assert_eq!(parameters.groups[0].id, "appearance");
+        assert_eq!(parameters.groups[0].parameters[0].id, "font-size");
     }
 
     #[test]
@@ -277,10 +317,33 @@ mod tests {
                 "bridgeApi": ">=1.0.0 <2.0.0"
               },
               "entry": { "style": "theme/lyra.css" },
+              "parameters": "parameters.json",
               "capabilities": ["styles"]
             }"#,
         )
         .expect("manifest");
+        fs::write(
+            root.path().join("parameters.json"),
+            r#"{
+              "schemaVersion": 1,
+              "groups": [{
+                "id": "appearance",
+                "label": "Appearance",
+                "parameters": [{
+                  "id": "font-size",
+                  "label": "Font size",
+                  "control": "length",
+                  "binding": { "cssVariable": "--lyra-size" },
+                  "defaultValue": 42,
+                  "unit": "px",
+                  "minimum": 24,
+                  "maximum": 72,
+                  "step": 1
+                }]
+              }]
+            }"#,
+        )
+        .expect("parameters");
         fs::write(
             root.path().join("theme/lyra.css"),
             ":root { --lyra-size: 42px; }\n",
