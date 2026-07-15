@@ -27,3 +27,5 @@ The original Swift production implementation has been removed after Rust parity 
 | Tauri application bundle | `.app` gate | Planned | Planned |
 
 The cross-platform jobs deliberately compile only the portable crates and CLI. Tauri installers are enabled per platform after their signing, packaging and system-WebView policies are defined. This keeps “core portability” separate from claiming that an unsigned installer is release-ready.
+
+Repository text is checked out with LF endings on every operating system. This is part of the reproducibility boundary because audited Theme CSS and packaged source files use byte-level SHA-256 values; platform checkout settings must not rewrite those bytes.
