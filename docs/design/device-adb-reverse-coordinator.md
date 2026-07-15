@@ -84,7 +84,7 @@ requires a connected device.
 
 A later, separately scoped Tauri integration may obtain the loopback listener
 port from its private `DevServerEndpoint`, construct a
-`DevBridgeReverseRequest`, and pass a real adapter that implements
-`AdbClient`. That integration must keep the endpoint bearer private, expose no
-raw ADB command surface, and add process-level tests before it can reach an
-Android runtime.
+`DevBridgeReverseRequest`, and explicitly create `lyra_adb::SystemAdb` from a
+trusted executable path. That integration must keep the endpoint bearer
+private, expose no raw ADB command surface, make the action user-visible and
+add process-level tests before it can reach an Android runtime.

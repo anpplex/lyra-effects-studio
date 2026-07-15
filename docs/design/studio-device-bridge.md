@@ -9,9 +9,10 @@ runtime's non-secret session summary.
 
 This slice deliberately does not execute `adb`, discover a device, change the
 Android application, provision an endpoint to a vehicle, transfer a Pack or
-send a revision command. The next M3 slice will compose the existing typed
-`AdbClient` / `FakeAdb` boundary with the retained endpoint; a real process
-adapter remains later still.
+send a revision command. M3 slice 3B later composed the existing typed
+`AdbClient` / `FakeAdb` boundary with the retained endpoint, and M3 slice 3C
+added a separate fixed-argv process adapter; neither is wired into this Tauri
+controller yet.
 
 ## Alternatives considered
 
@@ -24,10 +25,10 @@ adapter remains later still.
    browser implementation superficially convenient, but puts trusted
    provisioning material in renderer memory and browser devtools. It is
    rejected even though the listener is loopback-only.
-3. **Add real ADB reverse setup now.** The portable typed API exists, but no
-   process adapter or Android receiver is yet covered by the fake-first test
-   suite. Doing so now would turn a safe lifecycle control into an untestable
-   vehicle integration.
+3. **Add real ADB reverse setup now.** The portable typed API exists. The
+   later isolated process adapter is fake-executor tested, but connecting it
+   here would still combine device action and lifecycle controls before an
+   explicit user flow and Android receiver are covered.
 
 ## Architecture
 
@@ -88,8 +89,9 @@ protocol and capabilities but never a URL, port, session ID or bearer token.
 - A renderer cannot create a session directly. Only an authenticated runtime
   using trusted, future Rust-side provisioning can change `waiting` to
   `connected`.
-- The controller does not grant any ADB or filesystem authority. Future ADB
-  work must use the typed `AdbClient` operations and FakeADB transcript tests.
+- The controller does not grant any ADB or filesystem authority. A future
+  explicit action must use the typed `AdbClient` operations, the fixed-argv
+  `SystemAdb` adapter and fake executor coverage.
 
 ## Testing
 
@@ -109,10 +111,9 @@ release checks.
 
 ## Follow-on boundary
 
-M3 slice 3B now provides a Rust-only deployment coordinator that asks an
-injected `AdbClient` to select exactly one ready device and create an ADB
-reverse mapping from a future Tauri integration's retained loopback endpoint
-to the fixed Android Dev Bridge port. It is proven solely with `FakeAdb`
-transcripts and adds no real process execution. A separately scoped Tauri
-adapter, process test suite and Android/runtime integration remain required
-before a vehicle can consume the endpoint.
+M3 slice 3B provides a Rust-only deployment coordinator that asks an injected
+`AdbClient` to select exactly one ready device and create an ADB reverse
+mapping to the fixed Android Dev Bridge port. M3 slice 3C provides the
+separate `SystemAdb` process adapter with fake-executor coverage. A separately
+scoped Tauri action and Android/runtime integration remain required before a
+vehicle can consume the endpoint.
