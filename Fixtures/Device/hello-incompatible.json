@@ -1,0 +1,7 @@
+{
+  "type": "hello",
+  "protocolVersion": "2.0.0",
+  "runtimeVersion": "0.11.20-lyricify",
+  "deviceProfileId": "com.avatr.cluster.4032x284",
+  "capabilities": ["stageRevision", "activate"]
+}
