@@ -8,6 +8,7 @@ Lyra Effects Studio uses a portable Rust domain layer and a small Tauri 2 deskto
 - `lyra-project` owns Device Profiles, scenarios, parameter schemas, project detection and CSS patching.
 - `lyra-registry` owns canonical Catalogs and Ed25519 verification.
 - `lyra-device` owns Dev Bridge hello/negotiation, revision lifecycle semantics and typed ADB boundaries.
+- `lyra-dev-server` owns the authenticated IPv4-loopback hello listener and one-profile session ownership. It depends on `lyra-device`; `lyra-device` remains HTTP- and runtime-free.
 - `lyra-effects` exposes the portable core as a JSON-speaking CLI.
 - `src-tauri` exposes narrowly scoped project commands to the frontend. It does not move validation or Registry trust decisions into JavaScript.
 - `apps/studio` owns the cross-platform editor UI and uses a typed fake backend for browser tests.
@@ -18,7 +19,7 @@ The Lyra Android application remains Kotlin. Desktop and Android exchange versio
 
 The original Swift production implementation has been removed after Rust parity tests covered Pack bytes, canonical Catalog behavior, signatures, diagnostics and CLI workflows. Rust is now the sole production implementation for the desktop core and CLI.
 
-M3 adds the portable device domain without yet crossing an operating-system or Android boundary. JSON fixtures drive hello parsing and strict FakeADB transcripts on all three CI operating systems. A later adapter may implement the same typed `AdbClient` operations with a real process, but arbitrary shell commands are intentionally absent from the domain API.
+M3 adds the portable device domain and an authenticated IPv4-loopback hello server without crossing an Android or Tauri boundary. Real TCP tests drive the server on all three CI operating systems; it uses an OS-random bearer token, accepts one device profile and exposes only a non-secret session snapshot. JSON fixtures continue to drive hello parsing and strict FakeADB transcripts. A later adapter may implement the same typed `AdbClient` operations with a real process, but arbitrary shell commands are intentionally absent from the domain API.
 
 ## Platform gates
 

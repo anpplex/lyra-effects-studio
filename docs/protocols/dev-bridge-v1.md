@@ -1,6 +1,6 @@
 # Dev Bridge v1
 
-Dev Bridge v1 is the portable contract between Lyra Effects Studio and a future Lyra Android runtime. The current implementation is deliberately fake-first: it defines and tests device semantics without starting ADB, opening a socket or changing Android code.
+Dev Bridge v1 is the portable contract between Lyra Effects Studio and a future Lyra Android runtime. The current implementation is fake-first for ADB and Android, while its host-side hello server is exercised with real IPv4-loopback TCP.
 
 ## Hello and negotiation
 
@@ -19,6 +19,20 @@ The device starts a session with a JSON hello message:
 Protocol major version `1` is mandatory. Different minor or patch versions are compatible, and the negotiated version is the lower of the two semantic versions. Negotiated capabilities are the sorted intersection of host and device advertisements. A host-required capability must also be advertised by the device; host-only capabilities are never silently added.
 
 Unknown hello fields are retained so vendor metadata can pass through newer hosts without weakening validation of required fields.
+
+## Authenticated loopback hello
+
+The host starts an ephemeral listener at `127.0.0.1:0` and provisions its URL plus a fresh 256-bit bearer value through a trusted future adapter. The only route is:
+
+```text
+POST /v1/hello
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+The body is the hello JSON above and is limited to 16 KiB. Missing or incorrect credentials return HTTP 401. Malformed, unsupported or oversized requests return a JSON `device.bridge.invalidRequest` diagnostic. Negotiation failures return HTTP 422 and preserve their portable diagnostics.
+
+The first accepted hello creates a non-secret session snapshot containing a random 128-bit session ID, device profile, negotiated protocol version and sorted capability intersection. A reconnect from the same profile returns the existing snapshot. A different profile returns HTTP 409 with `device.bridge.sessionActive`; it cannot replace the current session.
 
 ## Revision lifecycle
 
@@ -52,7 +66,7 @@ Callers branch on codes rather than English messages. The v1 core currently defi
 
 | Code | Meaning |
 |---|---|
-| `device.protocol.invalid` | Malformed hello, version or host policy |
+| `device.protocol.invalid` | Core API rejects a malformed hello, version or host policy |
 | `device.protocol.incompatible` | Host and device major versions differ |
 | `device.capability.missing` | A required capability was not advertised |
 | `device.revision.invalidId` | Revision ID is not lowercase SHA-256 |
@@ -64,7 +78,13 @@ Callers branch on codes rather than English messages. The v1 core currently defi
 | `device.fakeAdb.invalidTranscript` | Transcript JSON is malformed |
 | `device.fakeAdb.unexpectedCall` | Operation order or arguments differ from the transcript |
 | `device.fakeAdb.pendingCalls` | A test finished before consuming every configured operation |
+| `device.bridge.unauthorized` | Loopback hello lacks the current bearer token |
+| `device.bridge.invalidRequest` | Loopback hello is malformed, unsupported or exceeds 16 KiB |
+| `device.bridge.sessionActive` | Another device profile already owns the loopback session |
+| `device.bridge.tokenGenerationFailed` | The host could not obtain random bearer bytes |
+| `device.bridge.sessionGenerationFailed` | The host could not obtain random session-ID bytes |
+| `device.bridge.listenFailed` | The IPv4 loopback listener could not start |
 
 ## Current boundary
 
-This milestone does not execute `adb`, discover Android SDK paths, listen on a network port, expose a Tauri command or modify the Lyra APK. Those adapters must remain thin consumers of `lyra-device`, preserve these stable codes and receive separate process, transport and Android integration tests.
+This milestone does not execute `adb`, discover Android SDK paths, expose a Tauri command or modify the Lyra APK. It does listen only on an ephemeral IPv4 loopback port for the authenticated hello route; it has no LAN listener, WebSocket, command, Pack or filesystem endpoint. Future adapters must remain thin consumers of `lyra-device` and `lyra-dev-server`, preserve these stable codes and receive separate process, transport and Android integration tests.
