@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import "./App.css";
-import { backend, isTauriRuntime, type DeviceBridgeStatus, type ProjectSnapshot } from "./lib/backend";
+import {
+  backend,
+  isTauriRuntime,
+  type AdbPreflightStatus,
+  type DeviceBridgeStatus,
+  type ProjectSnapshot,
+} from "./lib/backend";
 import {
   createStudioState,
   selectPack,
@@ -180,6 +186,7 @@ function createPreviewNonce(): string {
 }
 
 const STOPPED_DEVICE_BRIDGE: DeviceBridgeStatus = { state: "stopped", session: null };
+const UNCONFIGURED_ADB_PREFLIGHT: AdbPreflightStatus = { configured: false, readiness: "unconfigured" };
 
 function bridgeStatusLabel(status: DeviceBridgeStatus, loading: boolean, failed: boolean): string {
   if (failed) return "Bridge unavailable";
@@ -193,6 +200,16 @@ function bridgeStatusDetail(status: DeviceBridgeStatus): string | undefined {
   if (status.state !== "connected") return undefined;
   if (!status.session) return "Session details unavailable";
   return `${status.session.deviceProfileId} · ${status.session.protocolVersion} · ${status.session.capabilities.join(", ")}`;
+}
+
+function adbPreflightLabel(status: AdbPreflightStatus, loading: boolean, failed: boolean): string {
+  if (failed || status.readiness === "error") return "ADB check failed";
+  if (loading) return "Checking ADB…";
+  if (status.readiness === "notChecked") return "ADB selected";
+  if (status.readiness === "noReadyDevice") return "No ready device";
+  if (status.readiness === "oneReadyDevice") return "1 device ready";
+  if (status.readiness === "multipleReadyDevices") return "Multiple devices";
+  return "ADB not configured";
 }
 
 function App() {
@@ -209,6 +226,10 @@ function App() {
   const [deviceBridgeLoading, setDeviceBridgeLoading] = useState(true);
   const [deviceBridgeBusy, setDeviceBridgeBusy] = useState(false);
   const [deviceBridgeError, setDeviceBridgeError] = useState(false);
+  const [adbPreflight, setAdbPreflight] = useState<AdbPreflightStatus>(UNCONFIGURED_ADB_PREFLIGHT);
+  const [adbPreflightLoading, setAdbPreflightLoading] = useState(true);
+  const [adbPreflightBusy, setAdbPreflightBusy] = useState(false);
+  const [adbPreflightError, setAdbPreflightError] = useState(false);
   const sourceEditorRef = useRef<HTMLTextAreaElement>(null);
   const previewFrameRef = useRef<HTMLIFrameElement>(null);
 
@@ -351,6 +372,48 @@ function App() {
     }
   };
 
+  const refreshAdbPreflight = useCallback(async () => {
+    setAdbPreflightLoading(true);
+    try {
+      setAdbPreflight(await backend.deviceBridgeAdbStatus());
+      setAdbPreflightError(false);
+    } catch {
+      setAdbPreflightError(true);
+    } finally {
+      setAdbPreflightLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshAdbPreflight();
+  }, [refreshAdbPreflight]);
+
+  const chooseDeviceBridgeAdb = async () => {
+    if (adbPreflightBusy) return;
+    setAdbPreflightBusy(true);
+    try {
+      setAdbPreflight(await backend.chooseDeviceBridgeAdbExecutable());
+      setAdbPreflightError(false);
+    } catch {
+      setAdbPreflightError(true);
+    } finally {
+      setAdbPreflightBusy(false);
+    }
+  };
+
+  const checkDeviceBridgeAdb = async () => {
+    if (adbPreflightLoading || adbPreflightBusy || adbPreflightError || !adbPreflight.configured) return;
+    setAdbPreflightBusy(true);
+    try {
+      setAdbPreflight(await backend.checkDeviceBridgeAdb());
+      setAdbPreflightError(false);
+    } catch {
+      setAdbPreflightError(true);
+    } finally {
+      setAdbPreflightBusy(false);
+    }
+  };
+
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "s") {
@@ -421,6 +484,14 @@ function App() {
       : deviceBridgeError
         ? "Retry"
         : deviceBridge.state === "stopped" ? "Start bridge" : "Stop bridge";
+  const adbPreflightPhase = adbPreflightError || adbPreflight.readiness === "error"
+    ? "error"
+    : adbPreflightLoading
+      ? "loading"
+      : adbPreflight.readiness;
+  const adbPreflightLabelText = adbPreflightLabel(adbPreflight, adbPreflightLoading, adbPreflightError);
+  const adbSelectAction = adbPreflightBusy ? "Working…" : "Select ADB";
+  const adbCheckAction = adbPreflightLoading ? "Checking…" : adbPreflightBusy ? "Working…" : "Check devices";
 
   return (
     <main className="studio-shell" data-testid="studio-shell">
@@ -441,6 +512,11 @@ function App() {
           <button className="play-button" data-testid="play-toggle" onClick={() => setState((current) => ({ ...current, preview: { ...current.preview, playing: !current.preview.playing } }))}><Icon name={state.preview.playing ? "pause" : "play"} />{state.preview.playing ? "Pause" : "Play"}</button>
         </div>
         <div className="publish-block">
+          <section className="device-adb-control" data-testid="device-adb-control" aria-label="ADB device check">
+            <span className={`device-adb-status ${adbPreflightPhase}`} role="status" aria-live="polite"><i /><span className="device-adb-label">{adbPreflightLabelText}</span></span>
+            <button className="quiet-button device-adb-action" data-testid="device-adb-select" disabled={adbPreflightBusy} onClick={() => void chooseDeviceBridgeAdb()}>{adbSelectAction}</button>
+            <button className="quiet-button device-adb-action" data-testid="device-adb-check" disabled={adbPreflightLoading || adbPreflightBusy || adbPreflightError || !adbPreflight.configured} onClick={() => void checkDeviceBridgeAdb()}>{adbCheckAction}</button>
+          </section>
           <section className="device-bridge-control" data-testid="device-bridge-control" aria-label="Device bridge">
             <span className={`device-bridge-status ${bridgePhase}`} role="status" aria-live="polite" title={bridgeStatusDetail(deviceBridge)}><i /><span className="device-bridge-label">{bridgeLabel}</span></span>
             {deviceBridgeError && <span className="bridge-error" role="alert">Status check failed</span>}
