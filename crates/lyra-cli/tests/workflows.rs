@@ -84,7 +84,7 @@ fn builds_and_verifies_registry_artifacts_with_supplied_key() {
 fn registry_build_script_publishes_better_lyrics_theme_ids() {
     let output_root = TempDir::new().expect("output root");
     let site = output_root.path().join("site");
-    let output = Command::new("bash")
+    let output = bash_command()
         .arg(bash_path(
             &repository_root().join("Scripts/build-registry.sh"),
         ))
@@ -223,6 +223,24 @@ fn repository_root() -> PathBuf {
 
 fn path(path: &Path) -> &str {
     path.to_str().expect("UTF-8 path")
+}
+
+#[cfg(windows)]
+fn bash_command() -> Command {
+    let candidates = [
+        Path::new(r"C:\Program Files\Git\bin\bash.exe"),
+        Path::new(r"C:\Program Files\Git\usr\bin\bash.exe"),
+    ];
+    let executable = candidates
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+        .expect("Git for Windows bash.exe");
+    Command::new(executable)
+}
+
+#[cfg(not(windows))]
+fn bash_command() -> Command {
+    Command::new("bash")
 }
 
 #[cfg(windows)]
