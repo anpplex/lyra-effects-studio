@@ -50,7 +50,7 @@
 - Produces: `DevBridgeMappingReadiness`, `DevBridgeMappingStatus`, `DeviceBridgeController::{mapping_status,enable_mapping,disable_mapping}`, and a private `AdbClientFactory` seam.
 - Invariants: no mapping when stopped/unconfigured; no public status leaks an identifier; active or failed cleanup blocks executable replacement; exactly one controller operation owns a mapping transition.
 
-- [ ] **Step 1: Write failing controller tests before adding mapping types.**
+- [x] **Step 1: Write failing controller tests before adding mapping types.**
 
   Replace the current test-only `FakeAdbProbe` setup with a queue-backed fake
   client factory. It records each canonical executable path and returns a
@@ -197,7 +197,7 @@
   `reverse` call, then make
   `assert_established_once_with` compare it to the private listener port.
 
-- [ ] **Step 2: Run the focused controller tests to verify the red state.**
+- [x] **Step 2: Run the focused controller tests to verify the red state.**
 
   Run:
 
@@ -208,7 +208,7 @@
   Expected: compilation fails because mapping status, factory injection and
   controller methods do not exist.
 
-- [ ] **Step 3: Replace the list-only probe with one private client factory.**
+- [x] **Step 3: Replace the list-only probe with one private client factory.**
 
   First relax only the generic sizing bound in the existing portable reverse
   API so the controller can retain a private dynamic client without duplicating
@@ -310,7 +310,7 @@
   private state to `DevBridgeMappingStatus` with a pure helper; do not derive
   `Serialize`, `Debug` or `Clone` for `ActiveMapping`.
 
-- [ ] **Step 4: Implement explicit establish, remove and stop-time cleanup.**
+- [x] **Step 4: Implement explicit establish, remove and stop-time cleanup.**
 
   Add these controller methods and helpers. `enable_mapping` and
   `disable_mapping` must acquire `mapping_operation`, but neither may hold
@@ -380,7 +380,7 @@
   helper for an enable request while cleanup is still pending. Do not create a
   second mapping to recover from cleanup failure.
 
-- [ ] **Step 5: Verify the fake-first Rust boundary.**
+- [x] **Step 5: Verify the fake-first Rust boundary.**
 
   Run:
 
@@ -395,7 +395,7 @@
   only in `crates/lyra-adb/src/adapter.rs`; no controller test reaches a real
   executable.
 
-- [ ] **Step 6: Commit the mapping controller.**
+- [x] **Step 6: Commit the mapping controller.**
 
   ```sh
   git add src-tauri/src/device_bridge.rs
@@ -412,7 +412,7 @@
 - Produces: `get_device_bridge_mapping_status`, `enable_device_bridge_mapping` and `disable_device_bridge_mapping` Tauri commands.
 - Invariants: no command accepts renderer-controlled device data; no native dialog is opened; command errors contain diagnostics but UI will not render their raw messages.
 
-- [ ] **Step 1: Write the failing command-surface test.**
+- [x] **Step 1: Write the failing command-surface test.**
 
   Extend `src-tauri/src/lib.rs` tests:
 
@@ -425,7 +425,7 @@
   }
   ```
 
-- [ ] **Step 2: Run the focused library test to verify the red state.**
+- [x] **Step 2: Run the focused library test to verify the red state.**
 
   Run:
 
@@ -435,7 +435,7 @@
 
   Expected: compilation fails because the three wrappers do not exist.
 
-- [ ] **Step 3: Add the narrow command wrappers and registration.**
+- [x] **Step 3: Add the narrow command wrappers and registration.**
 
   Add these wrappers next to the current bridge and preflight commands:
 
@@ -466,7 +466,7 @@
   add command arguments, a serializer for mapping internals or a helper that
   invokes ADB outside the controller.
 
-- [ ] **Step 4: Verify the Tauri layer without starting ADB.**
+- [x] **Step 4: Verify the Tauri layer without starting ADB.**
 
   Run:
 
@@ -479,7 +479,7 @@
   Expected: all library tests pass without opening a dialog, starting a
   listener beyond existing fake loopback tests, or launching ADB.
 
-- [ ] **Step 5: Commit the command surface.**
+- [x] **Step 5: Commit the command surface.**
 
   ```sh
   git add src-tauri/src/lib.rs
@@ -497,7 +497,7 @@
 - Produces: `DevBridgeMappingReadiness`, `DevBridgeMappingStatus` and three `StudioBackend` methods.
 - Browser fixture behavior: `inactive → active → inactive`, with bridge and preflight transitions remaining independent.
 
-- [ ] **Step 1: Write the failing no-argument facade test.**
+- [x] **Step 1: Write the failing no-argument facade test.**
 
   Import `DevBridgeMappingStatus` and append:
 
@@ -517,7 +517,7 @@
   });
   ```
 
-- [ ] **Step 2: Run the focused facade test to verify the red state.**
+- [x] **Step 2: Run the focused facade test to verify the red state.**
 
   Run:
 
@@ -528,7 +528,7 @@
   Expected: a TypeScript or runtime failure because mapping status and methods
   do not exist.
 
-- [ ] **Step 3: Implement the safe renderer contract and fixture.**
+- [x] **Step 3: Implement the safe renderer contract and fixture.**
 
   Add this public type after `AdbPreflightStatus`:
 
@@ -553,7 +553,7 @@
   `{ readiness: "inactive" }`. Return `structuredClone` from every mapping
   fixture result. Do not add a path, serial, port, endpoint or raw error field.
 
-- [ ] **Step 4: Verify the typed frontend boundary.**
+- [x] **Step 4: Verify the typed frontend boundary.**
 
   Run:
 
@@ -565,7 +565,7 @@
   Expected: the exact mapping invokes are argument-free and lint reports no
   unsafe renderer type escape.
 
-- [ ] **Step 5: Commit the mapping facade.**
+- [x] **Step 5: Commit the mapping facade.**
 
   ```sh
   git add apps/studio/src/lib/backend.ts apps/studio/src/lib/backend.test.ts
@@ -584,7 +584,7 @@
 - Produces: `device-mapping-control`, `device-mapping-toggle` and safe mapping labels.
 - Copy: `Mapping off`, `Enabling mapping…`, `Mapping active`, `Removing mapping…`, `Retry mapping removal`, `Enable mapping`, `Remove mapping`, `Retry remove` and `Mapping failed`.
 
-- [ ] **Step 1: Write the failing fixture interaction test.**
+- [x] **Step 1: Write the failing fixture interaction test.**
 
   Add this test after the preflight interaction:
 
@@ -617,7 +617,7 @@
   });
   ```
 
-- [ ] **Step 2: Run the focused UI test to verify the red state.**
+- [x] **Step 2: Run the focused UI test to verify the red state.**
 
   Run:
 
@@ -627,7 +627,7 @@
 
   Expected: failure because the mapping control and methods are absent.
 
-- [ ] **Step 3: Add independent mapping state and safe event handlers.**
+- [x] **Step 3: Add independent mapping state and safe event handlers.**
 
   Import `DevBridgeMappingStatus`, add:
 
@@ -679,7 +679,7 @@
   Do not show the rejected Tauri error, status title, serial, executable path,
   port, endpoint or bearer.
 
-- [ ] **Step 4: Add compact responsive mapping styles.**
+- [x] **Step 4: Add compact responsive mapping styles.**
 
   Extend the existing header flex selector with `.device-mapping-control` and
   `.device-mapping-status`. Use neutral dot for inactive, animated neutral for
@@ -689,7 +689,7 @@
   not alter the three-column workspace grid, preview dimensions or Build pack
   button styles.
 
-- [ ] **Step 5: Verify the Studio interaction and production compile.**
+- [x] **Step 5: Verify the Studio interaction and production compile.**
 
   Run:
 
@@ -702,7 +702,7 @@
   Expected: fixture mapping remains disabled before explicit prerequisite
   actions, then reaches active and inactive without any private value rendered.
 
-- [ ] **Step 6: Commit the visible mapping control.**
+- [x] **Step 6: Commit the visible mapping control.**
 
   ```sh
   git add apps/studio/src/App.tsx apps/studio/src/App.css apps/studio/src/App.test.tsx
@@ -728,7 +728,7 @@
 - Consumes: the completed explicit mapping controller, Tauri commands and Studio control.
 - Produces: current public documentation that distinguishes explicit mapping from deferred runtime provisioning and records release evidence.
 
-- [ ] **Step 1: Update documentation and stable diagnostics.**
+- [x] **Step 1: Update documentation and stable diagnostics.**
 
   Update README and the listed architecture/design documents to state that
   Studio can explicitly establish or remove one mapping only after native ADB
@@ -747,7 +747,7 @@
   push/CI/squash/smoke step complete and append PR #11 plus merge commit
   `2c660ad`. Do not alter its recorded release-gate evidence.
 
-- [ ] **Step 2: Record completed tasks and check documentation consistency.**
+- [x] **Step 2: Record completed tasks and check documentation consistency.**
 
   After focused tests and documentation edits pass, mark Task 1–4 checkboxes
   in this plan. Run:
@@ -761,7 +761,7 @@
   Expected: no placeholder or whitespace issue; every reference distinguishes
   user-gated mapping from runtime provisioning and automatic behavior.
 
-- [ ] **Step 3: Run the complete local release gate.**
+- [x] **Step 3: Run the complete local release gate.**
 
   Run every command separately and require exit code 0:
 
@@ -781,7 +781,15 @@
   adapter, but no local test or build invokes its mapping methods or a real ADB
   executable.
 
-- [ ] **Step 4: Commit documentation and validation evidence.**
+  Verified locally on 2026-07-15: `npm run studio:lint`,
+  `npm run studio:test` (7 files / 29 tests), `npm run studio:build`,
+  `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+  `cargo test --workspace`, `cargo build --workspace --release`,
+  `npx tauri build --debug --no-bundle` and `git diff --check` all exited
+  successfully. All ADB behavioral tests used injected fake clients; no real
+  ADB executable was discovered or invoked.
+
+- [x] **Step 4: Commit documentation and validation evidence.**
 
   Add a dated, concise list of successful gate commands to this plan, then:
 

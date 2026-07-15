@@ -646,7 +646,7 @@
   git commit -m "docs(adb): publish user-gated preflight"
   ```
 
-- [ ] **Step 5: Push, review CI, squash-merge and smoke-test main.**
+- [x] **Step 5: Push, review CI, squash-merge and smoke-test main.**
 
   ```sh
   git push -u origin feature/tauri-adb-preflight
@@ -663,3 +663,7 @@
   worktree is clean after smoke tests. If `gh pr merge` reports that `main` is
   already in use by the root worktree, query the PR state before retrying; do
   not assume the remote merge failed.
+
+  Completed as PR [#11](https://github.com/anpplex/lyra-effects-studio/pull/11),
+  squash-merged into `main` as `2c660ad`. Linux, Windows and macOS CI passed;
+  main smoke tests then completed without running a real ADB executable.

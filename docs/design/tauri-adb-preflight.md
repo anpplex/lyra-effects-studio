@@ -5,14 +5,14 @@
 M3 slice 3D connects the completed `lyra-adb` process adapter to Lyra Effects
 Studio through a small, user-gated **ADB preflight**. A user explicitly selects
 an executable through a native dialog and then explicitly asks Studio to check
-ADB devices. Studio reports only a safe readiness summary; it does not create a
-reverse mapping, transfer a Pack, change Android, discover an SDK or run an ADB
-process automatically.
+ADB devices. Studio reports only a safe readiness summary; preflight itself
+does not create a reverse mapping, transfer a Pack, change Android, discover an
+SDK or run an ADB process automatically.
 
-This is deliberately narrower than creating the Dev Bridge reverse mapping.
-It establishes the trusted executable-selection and testable Tauri process
-boundary first, while avoiding long-lived mapping ownership, cleanup retries
-and stop-versus-connect races in the same change.
+This slice was deliberately narrower than creating the Dev Bridge reverse
+mapping. It established the trusted executable-selection and testable Tauri
+process boundary first; M3 slice 3E now owns explicit mapping, cleanup retries
+and stop-versus-cleanup behavior as a separately designed flow.
 
 ## Alternatives considered
 
@@ -70,9 +70,11 @@ changes while a probe is in flight, the stale result is discarded rather than
 overwriting the newer configuration state.
 
 The existing Dev Bridge listener is independent: preflight can be run before
-or after it starts, and starting or stopping the listener never launches ADB.
-The next slice may use the same private selected path and an explicit user
-action to establish a `DevBridgeReverseCoordinator` mapping.
+or after it starts, and starting or stopping the listener never launches ADB
+solely because of preflight. M3 slice 3E uses the same private selected path
+only after an explicit mapping action to establish a
+`DevBridgeReverseCoordinator` mapping; explicit bridge stop may then clean up
+that owned mapping before listener shutdown.
 
 ## Tauri and Studio surface
 
@@ -91,6 +93,11 @@ their own busy state; the check button is disabled until an executable is
 configured. The UI renders the readiness label or a generic stable error state,
 not an executable path or raw process diagnostic.
 
+M3 slice 3E adds a separate mapping projection and no-argument enable/remove
+commands. It remains disabled until this preflight shows exactly one ready
+device and a loopback bridge is running; it never reuses the preflight command
+as an automatic mapping trigger.
+
 ## Failure, concurrency and security model
 
 - No command accepts a raw shell fragment, ADB subcommand, serial, port or
@@ -105,16 +112,19 @@ not an executable path or raw process diagnostic.
 - A stale asynchronous result cannot replace a newer selected executable's
   status. Cancellation and failed configuration leave the previous valid state
   intact.
-- This slice creates no ADB reverse mapping, no listener, no Android change,
-  no Pack transfer, no persistence and no automatic retry loop.
+- Preflight itself creates no ADB reverse mapping, listener, Android change,
+  Pack transfer, persistence or automatic retry loop. The separate mapping
+  flow adds only explicit enable/remove and explicit stop-time cleanup; it does
+  not add automatic mapping or app-exit cleanup.
 
 ## Testing and release gates
 
-Rust controller tests inject a queue-backed ADB probe. They prove selection
-does not probe, unconfigured checks do not probe, zero/one/multiple ready
-counts map to the safe projection, typed errors do not expose raw output and a
-configuration change rejects a stale result. Existing `lyra-adb` unit tests
-continue to prove exact argv without running ADB.
+Rust controller tests inject a queue-backed ADB client factory. They prove
+selection does not probe, unconfigured checks do not probe, zero/one/multiple
+ready counts map to the safe projection, typed errors do not expose raw output
+and a configuration change rejects a stale result. Mapping tests additionally
+cover explicit establish/remove and stop-time cleanup. Existing `lyra-adb` unit
+tests continue to prove exact argv without running ADB.
 
 TypeScript backend tests assert the three new command names and browser-fixture
 transitions. React tests cover the disabled, configured and ready fixture flow;
@@ -125,8 +135,7 @@ execute a real ADB binary.
 
 ## Follow-on boundary
 
-After this preflight is proven, a separately designed slice may retain a
-successful `SystemAdb` and `ReverseMapping` under an explicit user action,
-derive the loopback port inside Rust and provide cleanup semantics. Android
-runtime provisioning, Pack transfer, revision commands and remote-theme
-activation remain out of scope.
+M3 slice 3E now retains a successful `SystemAdb` and `ReverseMapping` under an
+explicit user action, derives the loopback port inside Rust and provides
+cleanup semantics. Android runtime provisioning, Pack transfer, revision
+commands and remote-theme activation remain out of scope.

@@ -5,18 +5,19 @@
 M3 slice 3C adds a separate cross-platform Rust crate, `lyra-adb`, that
 implements the portable `lyra_device::AdbClient` trait through fixed Android
 Debug Bridge process invocations. It is the first code that can launch an ADB
-binary. M3 slice 3D now wires only its `list_devices` operation into a
-user-gated Studio preflight: Rust retains a native-picker-selected executable
-path in memory and creates `SystemAdb` only after the user explicitly chooses
-**Check devices**. Constructing the crate itself still does not discover an
-SDK, start a server or run a process.
+binary. M3 slice 3D wires `list_devices` into a user-gated Studio preflight,
+and 3E wires the coordinator's typed reverse/remove operations into separately
+clicked mapping actions. Rust retains a native-picker-selected executable path
+in memory and creates `SystemAdb` only after one of those explicit actions.
+Constructing the crate itself still does not discover an SDK, start a server or
+run a process.
 
 The adapter does not add automatic device selection, bearer provisioning, Pack
 transfer workflow, Android runtime source, command shell, environment-variable
-discovery or a connection retry loop. The later preflight UI is intentionally
-limited to native selection and a one-shot device-list check; it creates no
-reverse mapping. The completed portable reverse coordinator remains the owner
-of the single-ready-device selection rule.
+discovery or a connection retry loop. Preflight remains limited to native
+selection and a one-shot device-list check. Mapping remains explicitly owned by
+the Tauri controller, which delegates selection to the completed portable
+reverse coordinator and retains typed cleanup for retry.
 
 ## Alternatives considered
 
@@ -65,10 +66,12 @@ path is passed directly to `Command::new`, and every argument is a separate
 target selection.
 
 The current Tauri integration does not expose this general `AdbClient` surface
-to the renderer. Its three no-argument preflight commands retain the selected
-canonical path privately and can call only `SystemAdb::list_devices` after a
-user action. It never calls reverse, remove-reverse or push, and it does not
-derive a listener port or read an Android SDK path.
+to the renderer. Its no-argument preflight commands retain the selected
+canonical path privately and call only `SystemAdb::list_devices` after **Check
+devices**. Separate no-argument mapping commands derive a private listener
+port and can call only `DevBridgeReverseCoordinator::establish` or the retained
+`ReverseMapping::remove` after an explicit user action. It never exposes push,
+a raw ADB command, an Android SDK path, serial, endpoint or bearer.
 
 `list_devices` scans only after the exact `List of devices attached` header,
 which lets it ignore ADB daemon startup prelude lines. It accepts the portable
@@ -87,9 +90,10 @@ returns `device.adb.unsupportedDeviceState`.
 - `reverse`, cleanup and push preserve the existing typed input validation
   because callers cannot reach the adapter with raw serials, ports or device
   paths.
-- The adapter does not cache mappings or choose a device. A future owner may
-  pass it to `DevBridgeReverseCoordinator`, whose selection and cleanup
-  semantics remain unchanged.
+- The adapter does not cache mappings or choose a device. The Tauri mapping
+  controller is its explicit owner and passes it to
+  `DevBridgeReverseCoordinator`, whose selection and cleanup semantics remain
+  unchanged.
 
 ## Testing
 
@@ -110,9 +114,9 @@ Windows portable-core gate; macOS already validates the whole workspace.
 
 ## Follow-on boundary
 
-A future separately scoped Tauri integration may use the already selected
-private executable path, derive the listener port from the private
-`DevServerEndpoint`, and call the reverse coordinator. It must keep the bearer
-private, make device action explicit to the user, own mapping cleanup and add
-process-level integration tests before the adapter can control a vehicle
-runtime.
+The completed Tauri integration uses the selected private executable path,
+derives the listener port from the private `DevServerEndpoint`, and calls the
+reverse coordinator only after a visible mapping action. It keeps the bearer
+private and owns mapping cleanup for explicit retry or explicit bridge stop.
+Runtime provisioning, Pack/revision transfer and Android integration remain
+separate before the adapter can control a vehicle runtime.

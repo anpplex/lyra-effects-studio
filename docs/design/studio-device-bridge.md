@@ -7,14 +7,15 @@ already-authenticated loopback Dev Bridge from its Tauri shell. The Studio UI
 shows only a small, actionable device-connection state and a connected
 runtime's non-secret session summary.
 
-The Dev Bridge lifecycle itself does not execute `adb`, discover a device,
-change the Android application, provision an endpoint to a vehicle, transfer a
-Pack or send a revision command. M3 slice 3B later composed the existing typed
-`AdbClient` / `FakeAdb` boundary with the retained endpoint, and M3 slice 3C
-added a separate fixed-argv process adapter. M3 slice 3D now separately wires
-only `SystemAdb::list_devices` into a native-chooser, user-gated preflight; it
-does not consume the bridge endpoint, create a reverse mapping or change the
-lifecycle behavior described here.
+The Dev Bridge lifecycle itself does not automatically execute `adb`, discover
+a device, change the Android application, provision an endpoint to a vehicle,
+transfer a Pack or send a revision command. M3 slice 3B composed the typed
+`AdbClient` / `FakeAdb` boundary with the retained endpoint, 3C added a
+fixed-argv process adapter, and 3D added native-chooser device preflight. M3
+slice 3E adds one separately visible mapping action: it consumes the private
+endpoint only after **Enable mapping**, and an explicit **Stop bridge** first
+removes an owned mapping. It does not add automatic mapping, app-exit cleanup
+or runtime provisioning.
 
 ## Alternatives considered
 
@@ -37,15 +38,18 @@ lifecycle behavior described here.
 `src-tauri/src/device_bridge.rs` owns a `DeviceBridgeController` managed as
 Tauri application state. Its private `tokio::sync::Mutex<Option<RunningBridge>>`
 contains both the `DevServer` and its `DevServerEndpoint`. The endpoint never
-crosses the Tauri command boundary: retaining it only makes the future typed
-ADB reverse request possible inside Rust.
+crosses the Tauri command boundary: retaining it makes the current typed ADB
+reverse request possible only inside Rust.
 
-The same controller separately owns in-memory ADB preflight state and an
-injected probe. A Rust-owned native picker supplies a canonical regular-file
-path; that path remains private. Only an explicit **Check devices** action
-starts a blocking `SystemAdb::list_devices` call, which produces the fixed
-`devices -l` argv. Preflight neither observes nor changes the Dev Bridge
-lifecycle state.
+The same controller separately owns in-memory ADB preflight and mapping state
+plus an injected private ADB-client factory. A Rust-owned native picker
+supplies a canonical regular-file path; that path remains private. An explicit
+**Check devices** action starts a blocking `SystemAdb::list_devices` call,
+which produces the fixed `devices -l` argv. A separately clicked **Enable
+mapping** derives the private listener port, freshly selects exactly one ready
+device through `DevBridgeReverseCoordinator`, and retains both the typed
+mapping and client only for cleanup. Preflight itself neither maps nor changes
+the Dev Bridge lifecycle state.
 
 The controller creates one fixed `HostPolicy` for Dev Bridge v1:
 
@@ -53,11 +57,12 @@ The controller creates one fixed `HostPolicy` for Dev Bridge v1:
 - supported capabilities `activate` and `stageRevision`;
 - required capability `stageRevision`.
 
-Calling start while a server already exists is idempotent. Stop removes the
-running bridge from the mutex before awaiting graceful shutdown, so a slow
-server task never holds the controller lock. A status read queries the
-existing `DevServer::session_snapshot()` and returns one of these frontend-safe
-states:
+Calling start while a server already exists is idempotent. Stop first takes the
+same private mapping-operation gate used for enable/remove. If a mapping is
+active or cleanup-failed, it removes that mapping before taking the running
+bridge from the mutex; cleanup failure leaves the listener running and remains
+explicitly retryable. A status read queries the existing
+`DevServer::session_snapshot()` and returns one of these frontend-safe states:
 
 | State | Meaning | Session |
 |---|---|---|
@@ -70,9 +75,11 @@ The lifecycle command surface is intentionally limited to asynchronous
 Each returns `DeviceBridgeStatus`; failures are returned as the existing
 stable `device.bridge.*` diagnostic text. The separate preflight surface adds
 `get_device_bridge_adb_status`, `choose_device_bridge_adb_executable` and
-`check_device_bridge_adb`. Each returns only `{ configured, readiness }`, and
-none accepts an address, port, token, executable path, serial, shell fragment,
-Pack path or arbitrary protocol message.
+`check_device_bridge_adb`. The mapping surface adds
+`get_device_bridge_mapping_status`, `enable_device_bridge_mapping` and
+`disable_device_bridge_mapping`; each takes no renderer argument and returns
+only `{ readiness }`. None accepts an address, port, token, executable path,
+serial, shell fragment, Pack path or arbitrary protocol message.
 
 The controller maps the server's `SessionSnapshot` into a dedicated
 `DeviceBridgeSession` before serializing status. That projection keeps only
@@ -81,13 +88,16 @@ random `sessionId` never crosses the desktop boundary.
 
 The React backend facade gains equivalent typed methods. Browser mode uses an
 in-memory fixture controller whose bridge state changes from `stopped` to
-`waiting` and back, while its preflight state changes from `unconfigured` to
-`notChecked` to `oneReadyDevice`. On mount, Studio refreshes both safe status
-projections independently. The header offers Start or Stop plus **Select ADB**
-and **Check devices**; the latter starts disabled until selection succeeds. A
-connected bridge state shows device profile, negotiated protocol and
-capabilities but never a URL, port, session ID or bearer token. The preflight
-control never displays a path, serial or process output.
+`waiting` and back, its preflight state changes from `unconfigured` to
+`notChecked` to `oneReadyDevice`, and its mapping state changes only from
+`inactive` to `active` and back. On mount, Studio refreshes the three safe
+status projections independently. The header offers Start or Stop, **Select
+ADB**, **Check devices**, and an explicit **Enable mapping** / **Remove
+mapping** control. Mapping stays disabled until the bridge is running and
+preflight reports exactly one ready device. A connected bridge state shows
+device profile, negotiated protocol and capabilities but never a URL, port,
+session ID or bearer token. The preflight and mapping controls never display a
+path, serial, process output or raw command diagnostic.
 
 ## Security and failure model
 
@@ -104,11 +114,11 @@ control never displays a path, serial or process output.
 - A renderer cannot create a session directly. Only an authenticated runtime
   using trusted, future Rust-side provisioning can change `waiting` to
   `connected`.
-- The controller grants only a narrow, user-gated ADB readiness check. Its
-  private picker path is canonicalized to a regular file, and the only
-  process-capable call is `SystemAdb::list_devices` after **Check devices**.
-  There is no automatic discovery, reverse mapping, Pack push, Android change
-  or background retry.
+- The controller grants only narrow user-gated ADB actions. Its private picker
+  path is canonicalized to a regular file; **Check devices** calls only
+  `SystemAdb::list_devices`, while explicit map/remove actions use only the
+  typed coordinator or retained cleanup. There is no automatic discovery or
+  mapping, app-exit cleanup, Pack push, Android change or background retry.
 
 ## Testing
 
@@ -120,18 +130,16 @@ session-ID data. Tests may read private endpoint data only inside the Rust
 test module to send the trusted fixture hello; the public command type remains
 secret-free.
 
-TypeScript tests assert the exact lifecycle and no-argument preflight Tauri
-command names and typed response shapes. Browser-backend tests cover bridge
-and preflight fixture transitions. React tests verify the rendered labels,
-Start/Stop behavior and the disabled-until-selected ADB check. Full workspace,
-lint, frontend build and debug Tauri compilation remain the release checks.
+TypeScript tests assert the exact lifecycle, preflight and no-argument mapping
+Tauri command names and typed response shapes. Browser-backend tests cover
+bridge, preflight and mapping fixture transitions. React tests verify rendered
+safe labels, Start/Stop behavior, the disabled-until-selected ADB check and
+the explicit mapping lifecycle. Full workspace, lint, frontend build and debug
+Tauri compilation remain the release checks.
 
 ## Follow-on boundary
 
-M3 slice 3B provides a Rust-only deployment coordinator that asks an injected
-`AdbClient` to select exactly one ready device and create an ADB reverse
-mapping to the fixed Android Dev Bridge port. M3 slice 3C provides the
-separate `SystemAdb` process adapter with fake-executor coverage, and M3 slice
-3D proves explicit executable selection plus device readiness. A separately
-scoped Tauri reverse action, mapping cleanup policy and Android/runtime
-integration remain required before a vehicle can consume the endpoint.
+M3 slice 3E completes the separately scoped Tauri reverse action and mapping
+cleanup policy. Android/runtime provisioning, Pack transfer, revision commands
+and remote-theme activation remain required before a vehicle can consume the
+endpoint; no renderer command surface is added for those future concerns.

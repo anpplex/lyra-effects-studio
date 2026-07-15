@@ -2,7 +2,7 @@
 
 Lyra Effects Studio is a cross-platform editor, previewer, device debugger, and signed Theme Registry toolchain for [Lyra](https://github.com/anpplex/Lyra) lyric effects. macOS is the first desktop release target; the Rust core and CLI are designed for macOS, Windows, and Linux.
 
-The project is in active development. The public Pack and Registry contracts, Rust CLI, Tauri shell, interactive Studio workspace, schema-driven editing, conflict-safe project persistence, authenticated loopback Dev Bridge lifecycle controls, a portable FakeADB-first reverse coordinator, and a user-gated native-chooser ADB preflight are available. Direct reverse mapping and Android runtime integration remain later milestones.
+The project is in active development. The public Pack and Registry contracts, Rust CLI, Tauri shell, interactive Studio workspace, schema-driven editing, conflict-safe project persistence, authenticated loopback Dev Bridge lifecycle controls, a portable FakeADB-first reverse coordinator, a user-gated native-chooser ADB preflight, and one explicit removable Dev Bridge reverse mapping are available. Android runtime integration remains a later milestone.
 
 ## What is included
 
@@ -13,7 +13,7 @@ The project is in active development. The public Pack and Registry contracts, Ru
 - Deterministic Theme Pack builder and canonical JSON encoder.
 - Ed25519-signed static Theme Registry designed for direct consumption by the Lyra APK.
 - CLI workflows for validation, packaging, license audits, Registry publication and verification.
-- A portable Dev Bridge protocol, capability negotiation, revision lifecycle, typed FakeADB transcript runner, authenticated loopback hello server and safe reverse coordinator. The coordinator permits only one ready transport to map to the fixed Android port `49321`. Studio can select an ADB executable only through a native picker and, after an explicit **Check devices** action, invoke the separate `lyra-adb` adapter's fixed no-shell `devices -l` operation. The canonical path stays in memory inside Rust; Studio exposes no path, serial, output or credential. There is no automatic discovery, reverse mapping, Pack push, Android change or background ADB call.
+- A portable Dev Bridge protocol, capability negotiation, revision lifecycle, typed FakeADB transcript runner, authenticated loopback hello server and safe reverse coordinator. The coordinator permits only one ready transport to map to the fixed Android port `49321`. Studio can select an ADB executable only through a native picker and, after an explicit **Check devices** action, invoke the separate `lyra-adb` adapter's fixed no-shell `devices -l` operation. With a running bridge and exactly one freshly ready device, the user may then explicitly **Enable mapping** or **Remove mapping**; stopping the bridge also performs that owned cleanup only as part of the user's explicit stop action. The canonical path, serial, port, endpoint and bearer stay in Rust; Studio exposes only safe readiness. There is no automatic discovery or mapping, app-exit cleanup, Pack push, Android change or background ADB retry.
 - Three license-cleared Lyra-adapted themes; the complete 18-theme audit remains machine-readable.
 
 ## Requirements
