@@ -23,6 +23,7 @@ pub(crate) struct EditablePack {
     style_source: String,
     style_sha256: String,
     parameters: Option<ParameterSchema>,
+    scenarios: Vec<PreviewScenario>,
     documents: Vec<EditableDocument>,
 }
 
@@ -204,15 +205,8 @@ fn load_editable_pack(effects_root: &Path, manifest_path: &Path) -> Result<Edita
             EditableDocumentKind::Json,
         )?);
     }
-    for (index, relative) in manifest.scenarios.iter().enumerate() {
-        documents.push(load_editable_document(
-            &pack_root,
-            format!("scenario-{index}"),
-            format!("Scenario {}", index + 1),
-            relative,
-            EditableDocumentKind::Json,
-        )?);
-    }
+    let (scenarios, scenario_documents) = load_scenario_documents(&pack_root, &manifest.scenarios)?;
+    documents.extend(scenario_documents);
 
     Ok(EditablePack {
         id: manifest.id,
@@ -224,8 +218,42 @@ fn load_editable_pack(effects_root: &Path, manifest_path: &Path) -> Result<Edita
         style_source,
         style_sha256: sha256_hex(&style_bytes),
         parameters,
+        scenarios,
         documents,
     })
+}
+
+fn load_scenario_documents(
+    pack_root: &Path,
+    relative_paths: &[String],
+) -> Result<(Vec<PreviewScenario>, Vec<EditableDocument>), String> {
+    let mut scenarios = Vec::with_capacity(relative_paths.len());
+    let mut documents = Vec::with_capacity(relative_paths.len());
+    for (index, relative) in relative_paths.iter().enumerate() {
+        let document = load_editable_document(
+            pack_root,
+            format!("scenario-{index}"),
+            format!("Scenario {}", index + 1),
+            relative,
+            EditableDocumentKind::Json,
+        )?;
+        let scenario = PreviewScenario::from_slice(document.source.as_bytes())
+            .map_err(|error| format!("failed to parse scenario: {error}"))?;
+        let diagnostics = scenario.validate();
+        if !diagnostics.is_empty() {
+            return Err(format!(
+                "Scenario validation failed: {}",
+                diagnostics
+                    .iter()
+                    .map(|item| item.code.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        scenarios.push(scenario);
+        documents.push(document);
+    }
+    Ok((scenarios, documents))
 }
 
 fn load_editable_document(
@@ -446,10 +474,12 @@ mod tests {
             ":root { --lyra-size: 42px; }\n"
         );
         assert_eq!(snapshot.packs[0].style_sha256.len(), 64);
-        assert_eq!(snapshot.packs[0].documents.len(), 3);
+        assert_eq!(snapshot.packs[0].documents.len(), 4);
         assert_eq!(snapshot.packs[0].documents[0].id, "style");
         assert_eq!(snapshot.packs[0].documents[1].id, "html");
         assert_eq!(snapshot.packs[0].documents[2].id, "parameters");
+        assert_eq!(snapshot.packs[0].documents[3].id, "scenario-0");
+        assert_eq!(snapshot.packs[0].scenarios[0].id, "io.lyra.scenario.test");
         let parameters = snapshot.packs[0]
             .parameters
             .as_ref()
@@ -563,6 +593,7 @@ mod tests {
               },
               "entry": { "style": "theme/lyra.css", "html": "theme/index.html" },
               "parameters": "parameters.json",
+              "scenarios": ["scenarios/default.json"],
               "capabilities": ["styles"]
             }"#,
         )
@@ -594,6 +625,19 @@ mod tests {
             "<main id=\"blyrics-wrapper\"></main>\n",
         )
         .expect("html");
+        fs::create_dir_all(root.path().join("scenarios")).expect("scenario directory");
+        fs::write(
+            root.path().join("scenarios/default.json"),
+            r#"{
+              "schemaVersion": 1,
+              "id": "io.lyra.scenario.test",
+              "track": { "title": "Midnight Galaxy", "artist": "Future Echoes" },
+              "lyrics": [{ "startMilliseconds": 0, "endMilliseconds": 4000, "text": "Across the stars" }],
+              "events": [],
+              "expectedDiagnostics": []
+            }"#,
+        )
+        .expect("scenario");
         fs::write(
             root.path().join("theme/lyra.css"),
             ":root { --lyra-size: 42px; }\n",
