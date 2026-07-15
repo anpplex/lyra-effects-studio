@@ -18,6 +18,17 @@ export interface EditablePack {
   styleSource: string;
   styleSha256: string;
   parameters?: ParameterSchema | null;
+  documents?: EditableDocument[];
+}
+
+export interface EditableDocument {
+  id: string;
+  label: string;
+  kind: "css" | "html" | "json" | "javascript";
+  path: string;
+  relativePath: string;
+  source: string;
+  sha256: string;
 }
 
 export interface ProjectSnapshot {
@@ -29,6 +40,13 @@ export interface ProjectSnapshot {
 
 export interface SaveStyleRequest {
   packRoot: string;
+  expectedSha256: string;
+  source: string;
+}
+
+export interface SaveDocumentRequest {
+  packRoot: string;
+  documentPath: string;
   expectedSha256: string;
   source: string;
 }
@@ -47,6 +65,7 @@ export interface StudioBackend {
   appInfo(): Promise<AppInfo>;
   openProject(path: string): Promise<ProjectSnapshot>;
   saveStyle(request: SaveStyleRequest): Promise<SaveStyleResult>;
+  saveDocument(request: SaveDocumentRequest): Promise<SaveStyleResult>;
 }
 
 export function createBackend(invoke: InvokeTransport): StudioBackend {
@@ -59,6 +78,9 @@ export function createBackend(invoke: InvokeTransport): StudioBackend {
     },
     async saveStyle(request) {
       return (await invoke("save_project_style", { request })) as SaveStyleResult;
+    },
+    async saveDocument(request) {
+      return (await invoke("save_project_document", { request })) as SaveStyleResult;
     },
   };
 }
@@ -100,6 +122,35 @@ const fixtureProject: ProjectSnapshot = {
           },
         ],
       },
+      documents: [
+        {
+          id: "style",
+          label: "Styles",
+          kind: "css",
+          path: "/browser-fixture/future-lyrics/sustain/theme/lyra.css",
+          relativePath: "theme/lyra.css",
+          source: ":root {\n  --lyra-font-size: 42px;\n  --lyra-glow: 18%;\n}\n",
+          sha256: "fixture-sustain",
+        },
+        {
+          id: "html",
+          label: "HTML",
+          kind: "html",
+          path: "/browser-fixture/future-lyrics/sustain/theme/index.html",
+          relativePath: "theme/index.html",
+          source: "<main id=\"blyrics-wrapper\"></main>\n",
+          sha256: "fixture-html",
+        },
+        {
+          id: "parameters",
+          label: "Parameters",
+          kind: "json",
+          path: "/browser-fixture/future-lyrics/sustain/parameters.json",
+          relativePath: "parameters.json",
+          source: "{\n  \"schemaVersion\": 1,\n  \"groups\": []\n}\n",
+          sha256: "fixture-parameters",
+        },
+      ],
     },
     {
       id: "io.github.chengggit.youtube-music-dynamic-theme",
@@ -150,8 +201,29 @@ function createFixtureBackend(): StudioBackend {
       }
       pack.styleSource = request.source;
       pack.styleSha256 = `fixture-${request.source.length}`;
+      const styleDocument = pack.documents?.find((document) => document.id === "style");
+      if (styleDocument) {
+        styleDocument.source = request.source;
+        styleDocument.sha256 = pack.styleSha256;
+      }
       project = structuredClone(project);
       return { status: "saved", sha256: pack.styleSha256 };
+    },
+    async saveDocument(request) {
+      const pack = project.packs.find((item) => item.root === request.packRoot);
+      const document = pack?.documents?.find((item) => item.path === request.documentPath);
+      if (!pack || !document) throw new Error("Fixture document not found");
+      if (document.sha256 !== request.expectedSha256) {
+        return { status: "conflict", sha256: document.sha256 };
+      }
+      document.source = request.source;
+      document.sha256 = `fixture-${request.source.length}`;
+      if (document.id === "style") {
+        pack.styleSource = request.source;
+        pack.styleSha256 = document.sha256;
+      }
+      project = structuredClone(project);
+      return { status: "saved", sha256: document.sha256 };
     },
   };
 }

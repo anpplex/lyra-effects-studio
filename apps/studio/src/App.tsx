@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import "./App.css";
 import { backend, isTauriRuntime, type ProjectSnapshot } from "./lib/backend";
@@ -18,11 +18,13 @@ import {
   editProjectParameter,
   editProjectSource,
   redoProjectEdit,
+  selectProjectDocument,
   selectProjectPack,
   undoProjectEdit,
   type ProjectSession,
 } from "./studio/projectSession";
 import type { ParameterDefinition, ParameterValue } from "./studio/parameterEditor";
+import { diagnoseSourceDocument, findSourceMatches, replaceAllSourceMatches } from "./studio/sourceWorkspace";
 
 type NumericParameter = Exclude<keyof StudioParameters, "showSafeArea">;
 
@@ -164,12 +166,22 @@ function studioPacksFromProject(project: ProjectSnapshot): PackSummary[] {
   return [...families.values()];
 }
 
+function sourceOffset(source: string, line: number, column: number): number {
+  const lines = source.split("\n");
+  return lines.slice(0, Math.max(0, line - 1)).reduce((total, value) => total + value.length + 1, 0)
+    + Math.max(0, column - 1);
+}
+
 function App() {
   const [state, setState] = useState(createStudioState);
   const [search, setSearch] = useState("");
   const [consoleTab, setConsoleTab] = useState<"timeline" | "events" | "diagnostics">("events");
   const [projectSession, setProjectSession] = useState<ProjectSession>();
   const [projectError, setProjectError] = useState<string>();
+  const [sourceFind, setSourceFind] = useState("");
+  const [sourceReplace, setSourceReplace] = useState("");
+  const [sourceCaseSensitive, setSourceCaseSensitive] = useState(false);
+  const sourceEditorRef = useRef<HTMLTextAreaElement>(null);
 
   const selectedPack = state.packs.find((pack) => pack.id === state.selectedPackId)!;
   const selectedTheme = selectedPack.themes.find((theme) => theme.id === state.selectedThemeId)!;
@@ -181,6 +193,12 @@ function App() {
       .map((pack) => ({ ...pack, themes: pack.themes.filter((theme) => `${pack.name} ${theme.name}`.toLocaleLowerCase().includes(query)) }))
       .filter((pack) => pack.name.toLocaleLowerCase().includes(query) || pack.themes.length > 0);
   }, [search, state.packs]);
+  const sourceMatches = useMemo(() => projectSession
+    ? findSourceMatches(projectSession.draftSource, sourceFind, sourceCaseSensitive)
+    : [], [projectSession, sourceFind, sourceCaseSensitive]);
+  const sourceDiagnostics = useMemo(() => projectSession
+    ? diagnoseSourceDocument(projectSession.activeDocument)
+    : [], [projectSession]);
 
   const handleParameter = (key: NumericParameter, value: number) => {
     setState((current) => updateParameter(current, key, value));
@@ -192,8 +210,29 @@ function App() {
       : current);
   };
 
+  const handleReplaceAll = () => {
+    setProjectSession((current) => {
+      if (!current) return current;
+      const replaced = replaceAllSourceMatches(
+        current.sourceWorkspace,
+        sourceFind,
+        sourceReplace,
+        sourceCaseSensitive,
+      );
+      return editProjectSource(current, replaced.activeDocument.draftSource);
+    });
+  };
+
+  const jumpToSourceDiagnostic = (line: number, column: number) => {
+    const editor = sourceEditorRef.current;
+    if (!editor) return;
+    const offset = sourceOffset(editor.value, line, column);
+    editor.focus();
+    editor.setSelectionRange(offset, offset);
+  };
+
   const saveProject = useCallback(async () => {
-    if (!projectSession?.dirty || projectSession.status === "saving") return;
+    if (!projectSession?.activeDocument.dirty || projectSession.status === "saving") return;
     const request = {
       packRoot: projectSession.activePack.root,
       expectedSha256: projectSession.expectedSha256,
@@ -201,7 +240,9 @@ function App() {
     };
     setProjectSession((current) => current ? { ...current, status: "saving", message: "Saving…" } : current);
     try {
-      const result = await backend.saveStyle(request);
+      const result = projectSession.activePack.documents
+        ? await backend.saveDocument({ ...request, documentPath: projectSession.activeDocument.path })
+        : await backend.saveStyle(request);
       setProjectSession((current) => current ? applySaveResult(current, result) : current);
     } catch (error) {
       setProjectSession((current) => current ? { ...current, status: "error", message: error instanceof Error ? error.message : String(error) } : current);
@@ -213,7 +254,7 @@ function App() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "s") {
         event.preventDefault();
         void saveProject();
-      } else if (projectSession?.parameterEditor && (event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "z") {
+      } else if (state.inspectorTab === "design" && projectSession?.parameterEditor && (event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "z") {
         event.preventDefault();
         setProjectSession((current) => current
           ? event.shiftKey ? redoProjectEdit(current) : undoProjectEdit(current)
@@ -222,7 +263,7 @@ function App() {
     };
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [projectSession?.parameterEditor, saveProject]);
+  }, [projectSession?.parameterEditor, saveProject, state.inspectorTab]);
 
   const openProject = async () => {
     setProjectError(undefined);
@@ -273,7 +314,7 @@ function App() {
             <button data-testid="mode-day" className={state.preview.mode === "day" ? "active" : ""} aria-pressed={state.preview.mode === "day"} onClick={() => setState((current) => setPreviewMode(current, "day"))}><Icon name="sun" />Day</button>
             <button data-testid="mode-night" className={state.preview.mode === "night" ? "active" : ""} aria-pressed={state.preview.mode === "night"} onClick={() => setState((current) => setPreviewMode(current, "night"))}><Icon name="moon" />Night</button>
           </div>
-          {projectSession && <button className="quiet-button save-command" data-testid="save-project" disabled={!projectSession.dirty || projectSession.status === "saving"} onClick={() => void saveProject()}>{projectSession.status === "saving" ? "Saving…" : "Save"}</button>}
+          {projectSession && <button className="quiet-button save-command" data-testid="save-project" disabled={!projectSession.activeDocument.dirty || projectSession.status === "saving"} onClick={() => void saveProject()}>{projectSession.status === "saving" ? "Saving…" : "Save"}</button>}
           <button className="icon-button" aria-label="Refresh preview"><Icon name="refresh" /></button>
           <button className="play-button" data-testid="play-toggle" onClick={() => setState((current) => ({ ...current, preview: { ...current.preview, playing: !current.preview.playing } }))}><Icon name={state.preview.playing ? "pause" : "play"} />{state.preview.playing ? "Pause" : "Play"}</button>
         </div>
@@ -344,8 +385,11 @@ function App() {
             <section className="inspector-section compact"><div className="section-title"><span>Theme metadata</span><Icon name="chevron" size={13} /></div><dl className="metadata"><div><dt>Contract</dt><dd>lyra.pack/v1</dd></div><div><dt>Theme</dt><dd>{selectedTheme.id}</dd></div><div><dt>Version</dt><dd>{selectedTheme.version}</dd></div><div><dt>License</dt><dd>MIT</dd></div></dl></section>
           </div>}
           {state.inspectorTab === "source" && <div className="source-panel">
-            <div className="source-path"><span>{projectSession ? projectSession.activePack.stylePath : `themes/${selectedTheme.id}/theme.css`}</span>{projectSession && <button data-testid="source-save" disabled={!projectSession.dirty || projectSession.status === "saving"} onClick={() => void saveProject()}>{projectSession.status === "saving" ? "Saving…" : "Save"}</button>}</div>
-            {projectSession ? <textarea data-testid="source-editor" aria-label="Theme CSS source" spellCheck={false} value={projectSession.draftSource} onChange={(event) => { const source = event.currentTarget.value; setProjectSession((current) => current ? editProjectSource(current, source) : current); }} /> : <pre><code><span className="code-comment">{`/* Generated parameter patch */`}</span>{`\n:root {\n  --lyra-font-size: `}<b>{state.parameters.fontSize}px</b>{`;\n  --lyra-right-zone: `}<b>{state.parameters.rightZone}%</b>{`;\n  --lyra-glow: `}<b>{state.parameters.glow}%</b>{`;\n  --lyra-motion: `}<b>{state.parameters.motion}s</b>{`;\n}`}</code></pre>}
+            {projectSession && <div className="source-document-tabs" role="tablist" aria-label="Source documents">{projectSession.sourceWorkspace.documents.map((document) => <button key={document.id} role="tab" aria-selected={document.id === projectSession.activeDocument.id} className={document.id === projectSession.activeDocument.id ? "active" : ""} data-testid={`source-document-${document.id}`} onClick={() => setProjectSession((current) => current ? selectProjectDocument(current, document.id) : current)}><span>{document.label}</span><small>{document.kind}</small>{document.dirty && <i />}</button>)}</div>}
+            {projectSession && <div className="source-find-bar"><label><span className="sr-only">Find source</span><input data-testid="source-find" value={sourceFind} onChange={(event) => setSourceFind(event.currentTarget.value)} placeholder="Find" /></label><label><span className="sr-only">Replace source</span><input data-testid="source-replace" value={sourceReplace} onChange={(event) => setSourceReplace(event.currentTarget.value)} placeholder="Replace" /></label><button data-testid="source-case-sensitive" aria-pressed={sourceCaseSensitive} className={sourceCaseSensitive ? "active" : ""} onClick={() => setSourceCaseSensitive((value) => !value)}>Aa</button><button data-testid="source-replace-all" disabled={!sourceFind || sourceMatches.length === 0} onClick={handleReplaceAll}>All</button><span>{sourceFind ? `${sourceMatches.length} match${sourceMatches.length === 1 ? "" : "es"}` : ""}</span></div>}
+            <div className="source-path"><span>{projectSession ? projectSession.activeDocument.path : `themes/${selectedTheme.id}/theme.css`}</span>{projectSession && <button data-testid="source-save" disabled={!projectSession.activeDocument.dirty || projectSession.status === "saving" || sourceDiagnostics.some((item) => item.severity === "error")} onClick={() => void saveProject()}>{projectSession.status === "saving" ? "Saving…" : "Save"}</button>}</div>
+            {projectSession ? <textarea ref={sourceEditorRef} data-testid="source-editor" aria-label={`${projectSession.activeDocument.label} source`} spellCheck={false} value={projectSession.draftSource} onChange={(event) => { const source = event.currentTarget.value; setProjectSession((current) => current ? editProjectSource(current, source) : current); }} /> : <pre><code><span className="code-comment">{`/* Generated parameter patch */`}</span>{`\n:root {\n  --lyra-font-size: `}<b>{state.parameters.fontSize}px</b>{`;\n  --lyra-right-zone: `}<b>{state.parameters.rightZone}%</b>{`;\n  --lyra-glow: `}<b>{state.parameters.glow}%</b>{`;\n  --lyra-motion: `}<b>{state.parameters.motion}s</b>{`;\n}`}</code></pre>}
+            {projectSession && sourceDiagnostics.length > 0 && <div className="source-diagnostics">{sourceDiagnostics.map((diagnostic, index) => <button key={`${diagnostic.message}-${index}`} data-testid="source-diagnostic" onClick={() => jumpToSourceDiagnostic(diagnostic.line, diagnostic.column)}><Icon name="warning" /><span><strong>{diagnostic.message}</strong><small>Ln {diagnostic.line}, Col {diagnostic.column}</small></span></button>)}</div>}
             {(projectSession?.message || projectError) && <div className={`project-message ${projectSession?.status === "conflict" || projectSession?.status === "error" || projectError ? "error" : ""}`} data-testid="project-message"><Icon name={projectSession?.status === "conflict" || projectSession?.status === "error" || projectError ? "warning" : "info"} /><span>{projectError ?? projectSession?.message}</span></div>}
             <div className="source-note"><Icon name="info" /><span>{projectSession ? "Writes are atomic and protected by a source hash. External changes are never overwritten silently." : "Only changed variables are written. Formatting and unknown fields stay intact."}</span></div>
           </div>}

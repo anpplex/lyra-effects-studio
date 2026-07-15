@@ -12,6 +12,16 @@ import {
   type ParameterEditor,
   type ParameterValue,
 } from "./parameterEditor";
+import {
+  createSourceWorkspace,
+  editSourceDocument,
+  editActiveSourceDocument,
+  hasDirtySourceDocuments,
+  markSourceDocumentSaved,
+  selectSourceDocument,
+  type SourceDocumentState,
+  type SourceWorkspace,
+} from "./sourceWorkspace";
 
 export type ProjectSessionStatus = "ready" | "saving" | "saved" | "conflict" | "error";
 
@@ -25,19 +35,40 @@ export interface ProjectSession {
   status: ProjectSessionStatus;
   message?: string;
   parameterEditor?: ParameterEditor;
+  sourceWorkspace: SourceWorkspace;
+  activeDocument: SourceDocumentState;
 }
 
 export function createProjectSession(project: ProjectSnapshot): ProjectSession {
   const activePack = project.packs[0];
   if (!activePack) throw new Error("The project does not contain an editable style Pack");
+  return createSessionForPack(project, activePack);
+}
+
+function createSessionForPack(
+  project: ProjectSnapshot,
+  activePack: EditablePack,
+): ProjectSession {
+  const sourceWorkspace = createSourceWorkspace(activePack.documents ?? [{
+    id: "style",
+    label: "Styles",
+    kind: "css",
+    path: activePack.stylePath,
+    relativePath: "theme/lyra.css",
+    source: activePack.styleSource,
+    sha256: activePack.styleSha256,
+  }]);
+  const activeDocument = sourceWorkspace.activeDocument;
   return {
     project,
     activePack,
-    draftSource: activePack.styleSource,
-    persistedSource: activePack.styleSource,
-    expectedSha256: activePack.styleSha256,
+    draftSource: activeDocument.draftSource,
+    persistedSource: activeDocument.persistedSource,
+    expectedSha256: activeDocument.expectedSha256,
     dirty: false,
     status: "ready",
+    sourceWorkspace,
+    activeDocument,
     parameterEditor: activePack.parameters
       ? createParameterEditor(activePack.parameters, activePack.styleSource)
       : undefined,
@@ -47,33 +78,29 @@ export function createProjectSession(project: ProjectSnapshot): ProjectSession {
 export function selectProjectPack(session: ProjectSession, packId: string): ProjectSession {
   const activePack = session.project.packs.find((pack) => pack.id === packId);
   if (!activePack || activePack.id === session.activePack.id) return session;
-  return {
-    ...session,
-    activePack,
-    draftSource: activePack.styleSource,
-    persistedSource: activePack.styleSource,
-    expectedSha256: activePack.styleSha256,
-    dirty: false,
-    status: "ready",
-    message: undefined,
-    parameterEditor: activePack.parameters
-      ? createParameterEditor(activePack.parameters, activePack.styleSource)
-      : undefined,
-  };
+  return createSessionForPack(session.project, activePack);
+}
+
+export function selectProjectDocument(
+  session: ProjectSession,
+  documentId: string,
+): ProjectSession {
+  return applySourceWorkspace(
+    session,
+    selectSourceDocument(session.sourceWorkspace, documentId),
+    session.parameterEditor,
+  );
 }
 
 export function editProjectSource(session: ProjectSession, source: string): ProjectSession {
-  const parameterEditor = session.parameterEditor
+  const parameterEditor = session.parameterEditor && session.activeDocument.id === "style"
     ? replaceParameterSource(session.parameterEditor, source)
-    : undefined;
-  return {
-    ...session,
-    draftSource: source,
-    dirty: source !== session.persistedSource,
-    status: "ready",
-    message: undefined,
+    : session.parameterEditor;
+  return applySourceWorkspace(
+    session,
+    editActiveSourceDocument(session.sourceWorkspace, source),
     parameterEditor,
-  };
+  );
 }
 
 export function editProjectParameter(
@@ -103,11 +130,32 @@ function applyParameterEditor(
   parameterEditor: ParameterEditor,
 ): ProjectSession {
   if (parameterEditor === session.parameterEditor) return session;
+  const sourceWorkspace = selectSourceDocument(
+    editSourceDocument(session.sourceWorkspace, "style", parameterEditor.source),
+    "style",
+  );
+  return applySourceWorkspace(
+    session,
+    sourceWorkspace,
+    parameterEditor,
+  );
+}
+
+function applySourceWorkspace(
+  session: ProjectSession,
+  sourceWorkspace: SourceWorkspace,
+  parameterEditor: ParameterEditor | undefined,
+): ProjectSession {
+  const activeDocument = sourceWorkspace.activeDocument;
   return {
     ...session,
+    sourceWorkspace,
+    activeDocument,
     parameterEditor,
-    draftSource: parameterEditor.source,
-    dirty: parameterEditor.source !== session.persistedSource,
+    draftSource: activeDocument.draftSource,
+    persistedSource: activeDocument.persistedSource,
+    expectedSha256: activeDocument.expectedSha256,
+    dirty: hasDirtySourceDocuments(sourceWorkspace),
     status: "ready",
     message: undefined,
   };
@@ -124,11 +172,32 @@ export function applySaveResult(
       message: "The source changed on disk. Reload or save a copy before overwriting.",
     };
   }
-  const updatedPack = {
+  const sourceWorkspace = markSourceDocumentSaved(
+    session.sourceWorkspace,
+    session.activeDocument.id,
+    result.sha256,
+  );
+  const savedDocument = sourceWorkspace.activeDocument;
+  const updatedPack: EditablePack = {
     ...session.activePack,
-    styleSource: session.draftSource,
-    styleSha256: result.sha256,
+    styleSource: savedDocument.id === "style"
+      ? savedDocument.draftSource
+      : session.activePack.styleSource,
+    styleSha256: savedDocument.id === "style"
+      ? result.sha256
+      : session.activePack.styleSha256,
+    documents: sourceWorkspace.documents.map((document) => ({
+      id: document.id,
+      label: document.label,
+      kind: document.kind,
+      path: document.path,
+      relativePath: document.relativePath,
+      source: document.draftSource,
+      sha256: document.expectedSha256,
+    })),
   };
+  const activeDocument = sourceWorkspace.activeDocument;
+  const dirty = hasDirtySourceDocuments(sourceWorkspace);
   return {
     ...session,
     project: {
@@ -138,10 +207,13 @@ export function applySaveResult(
       ),
     },
     activePack: updatedPack,
-    persistedSource: session.draftSource,
-    expectedSha256: result.sha256,
-    dirty: false,
+    sourceWorkspace,
+    activeDocument,
+    draftSource: activeDocument.draftSource,
+    persistedSource: activeDocument.persistedSource,
+    expectedSha256: activeDocument.expectedSha256,
+    dirty,
     status: "saved",
-    message: "Saved atomically",
+    message: dirty ? "Saved this document; other changes remain" : "Saved atomically",
   };
 }
