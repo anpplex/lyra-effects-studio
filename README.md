@@ -83,6 +83,8 @@ https://anpplex.github.io/lyra-effects-studio/registry-v1.json
 
 Pull requests run all source, license, security and reproducibility gates without access to production signing material. Tag or manual publication runs receive `LYRA_REGISTRY_PRIVATE_KEY_BASE64` from a protected GitHub Actions secret, create versioned Pack URLs and deploy the signed output to GitHub Pages.
 
+The first publication must also enable the repository's Pages source as **GitHub Actions** and inject the matching Android public key at release build time. See [Registry publishing operations](docs/operations/registry-publishing.md) for the exact setup and rotation steps.
+
 For a local non-production build:
 
 ```sh

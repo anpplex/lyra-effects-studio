@@ -24,6 +24,14 @@ jobs:
           rustup toolchain install 1.97.0 --profile minimal
           cargo test --workspace
           cargo run -p lyra-effects -- license-audit Registry
+      - name: Check production signing configuration
+        env:
+          LYRA_REGISTRY_PRIVATE_KEY_BASE64: ${{ secrets.LYRA_REGISTRY_PRIVATE_KEY_BASE64 }}
+        run: |
+          if [[ -z "${LYRA_REGISTRY_PRIVATE_KEY_BASE64:-}" ]]; then
+            echo "::error::Missing LYRA_REGISTRY_PRIVATE_KEY_BASE64; configure the protected production secret before publishing."
+            exit 78
+          fi
       - name: Build signed Registry
         env:
           LYRA_REGISTRY_PRIVATE_KEY_BASE64: ${{ secrets.LYRA_REGISTRY_PRIVATE_KEY_BASE64 }}
