@@ -55,7 +55,7 @@ impl ReverseMapping {
     /// # Errors
     ///
     /// Preserves the adapter's stable diagnostic when cleanup fails.
-    pub fn remove<C: AdbClient>(&self, adb: &mut C) -> Result<(), DeviceDiagnostic> {
+    pub fn remove<C: AdbClient + ?Sized>(&self, adb: &mut C) -> Result<(), DeviceDiagnostic> {
         adb.remove_reverse(&self.serial, self.remote_port)
     }
 }
@@ -69,7 +69,7 @@ impl DevBridgeReverseCoordinator {
     /// # Errors
     ///
     /// Returns a stable selection diagnostic, or preserves an adapter diagnostic.
-    pub fn establish<C: AdbClient>(
+    pub fn establish<C: AdbClient + ?Sized>(
         adb: &mut C,
         request: DevBridgeReverseRequest,
     ) -> Result<ReverseMapping, DeviceDiagnostic> {

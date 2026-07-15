@@ -4,14 +4,15 @@
 
 M3 starts with a portable `lyra-device` crate that models Dev Bridge negotiation, revision lifecycle and ADB operations without opening sockets, launching `adb` or changing Lyra Android. Every behavior is exercised with shared JSON fixtures and an in-memory fake.
 
-M3's completed fake-first foundation is composed in six slices:
+M3's completed fake-first foundation is composed in seven slices:
 
 1. device protocol, revision state and FakeADB;
 2. loopback Dev Server and authenticated sessions;
 3. Tauri commands and Studio device UI;
 4. portable single-device ADB reverse coordination;
 5. explicit-path, fixed-argv ADB process adaptation; and
-6. user-gated Tauri ADB readiness preflight.
+6. user-gated Tauri ADB readiness preflight; and
+7. explicit Tauri-owned reverse mapping and cleanup.
 
 The first slice is complete when success and failure paths can be reproduced on macOS, Windows and Linux without a connected device.
 
@@ -29,6 +30,7 @@ The first slice is complete when success and failure paths can be reproduced on 
 - `reverse`: a stateless Dev Bridge coordinator that selects exactly one ready transport, maps a caller-supplied host port to the fixed Android port `49321`, and returns an explicit retryable cleanup handle.
 - `lyra-adb`: a separate process crate that implements `AdbClient` through a configured executable path, fixed `OsString` argument vectors and fake-executor tests. It is not an automatic desktop integration.
 - `tauri preflight`: a Rust-owned native executable chooser and an in-memory, safe readiness projection. It invokes only `list_devices` after the user explicitly requests a check; it never serializes the executable path or ADB device details.
+- `tauri mapping`: a private controller-owned `SystemAdb` and `ReverseMapping` pair. Only explicit enable, explicit remove, or an explicit bridge stop can invoke the coordinator or typed cleanup; Studio receives only mapping readiness.
 - `fake_adb`: an ordered transcript of expected calls and configured results. Unexpected calls fail the test with a structured diagnostic.
 - `Fixtures/Device`: shared valid, incompatible and malformed hello messages plus FakeADB transcripts. Android will consume the same protocol fixtures in M4.
 
@@ -43,8 +45,8 @@ The first slice is complete when success and failure paths can be reproduced on 
 
 ## Testing
 
-Unit tests cover protocol decoding, unknown-field retention, capability negotiation, every allowed/forbidden revision transition and ADB input validation. Transcript tests cover zero, one and multiple devices, offline devices, reverse failure, cleanup failure and push failure. The Tauri preflight controller uses injected probes, so tests never launch ADB. CI runs the portable crates on macOS, Windows and Linux with no real ADB executable.
+Unit tests cover protocol decoding, unknown-field retention, capability negotiation, every allowed/forbidden revision transition and ADB input validation. Transcript tests cover zero, one and multiple devices, offline devices, reverse failure, cleanup failure and push failure. The Tauri controller uses injected ADB clients for both preflight and mapping, so tests never launch ADB. CI runs the portable crates on macOS, Windows and Linux with no real ADB executable.
 
 ## Follow-on boundary
 
-The Dev Server slice may depend on `lyra-device`; the crate must not depend on Tauri, HTTP/WebSocket libraries or UI types. `lyra-adb` implements the same trait through an explicitly configured binary without a shell. Tauri now constructs it only for a selected executable after an explicit **Check devices** action, and that preflight calls only `list_devices`; it has no automatic discovery, reverse mapping, Pack push or Android action. A later opt-in action may derive its local port from the private loopback endpoint. Android remains unchanged until FakeADB, fake process and Fake Bridge coverage are complete.
+The Dev Server slice may depend on `lyra-device`; the crate must not depend on Tauri, HTTP/WebSocket libraries or UI types. `lyra-adb` implements the same trait through an explicitly configured binary without a shell. Tauri now constructs it only after an explicit **Check devices**, **Enable mapping**, **Remove mapping** or bridge-stop action; preflight calls only `list_devices`, while mapping uses the existing coordinator and retained cleanup handle. It has no automatic discovery or mapping, app-exit cleanup, Pack push or Android action. Android runtime provisioning remains separate from this completed fake-first boundary.

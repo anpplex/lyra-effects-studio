@@ -67,6 +67,33 @@ describe("Studio workspace", () => {
     expect(await screen.findByText("1 device ready")).toBeInTheDocument();
   });
 
+  it("creates and removes an explicit mapping only after bridge and ADB preflight", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><App /></StrictMode>);
+
+    const control = await screen.findByTestId("device-mapping-control");
+    const action = screen.getByTestId("device-mapping-toggle");
+    expect(await screen.findByText("Mapping off")).toBeInTheDocument();
+    expect(action).toBeDisabled();
+    expect(control).not.toHaveTextContent("/Users/");
+    expect(control).not.toHaveTextContent("Bearer");
+
+    await user.click(screen.getByTestId("device-bridge-toggle"));
+    expect(await screen.findByText("Waiting for Lyra")).toBeInTheDocument();
+    await user.click(screen.getByTestId("device-adb-select"));
+    expect(await screen.findByText("ADB selected")).toBeInTheDocument();
+    await user.click(screen.getByTestId("device-adb-check"));
+    expect(await screen.findByText("1 device ready")).toBeInTheDocument();
+    expect(action).toBeEnabled();
+
+    await user.click(action);
+    expect(await screen.findByText("Mapping active")).toBeInTheDocument();
+    expect(action).toHaveTextContent("Remove mapping");
+
+    await user.click(action);
+    expect(await screen.findByText("Mapping off")).toBeInTheDocument();
+  });
+
   it("generates project controls from the parameter schema with undo support", async () => {
     const user = userEvent.setup();
     render(<StrictMode><App /></StrictMode>);

@@ -15,9 +15,9 @@ provision the bearer, or expose a UI command. Those remain later slices.
 
 1. **Portable coordinator with an injected `AdbClient` — selected.** The
    selection and cleanup rules are independently testable on every CI platform
-   with `FakeAdb`. A future Tauri adapter can derive the host port from its
-   retained `DevServerEndpoint` without moving any server secret across a
-   boundary.
+   with `FakeAdb`. M3 slice 3E now composes it inside Tauri only after an
+   explicit user mapping action, deriving the host port from the retained
+   `DevServerEndpoint` without moving any server secret across a boundary.
 2. **Put selection and reverse calls directly in `DeviceBridgeController`.**
    This would make the initial integration shorter but couples device policy to
    the desktop runtime before a real process adapter exists.
@@ -56,8 +56,8 @@ Explicit cleanup is a separate operation:
 remove_reverse(serial, device port 49321)
 ```
 
-Adapter diagnostics, including `device.adb.reverseFailed` and a future
-remove failure, are preserved without rewriting their stable codes.
+Adapter diagnostics, including `device.adb.reverseFailed` and remove failure,
+are preserved without rewriting their stable codes.
 
 ## Security and recovery
 
@@ -82,9 +82,10 @@ requires a connected device.
 
 ## Follow-on boundary
 
-A later, separately scoped Tauri integration may obtain the loopback listener
-port from its private `DevServerEndpoint`, construct a
-`DevBridgeReverseRequest`, and explicitly create `lyra_adb::SystemAdb` from a
-trusted executable path. That integration must keep the endpoint bearer
-private, expose no raw ADB command surface, make the action user-visible and
-add process-level tests before it can reach an Android runtime.
+M3 slice 3E now obtains the loopback listener port from the private
+`DevServerEndpoint`, constructs a `DevBridgeReverseRequest`, and explicitly
+creates `lyra_adb::SystemAdb` from the native-picker-selected executable path.
+That integration keeps the endpoint bearer private, exposes only no-argument
+mapping commands and safe readiness, and retains cleanup for explicit retry or
+an explicit bridge stop. It adds no runtime provisioning, Pack transfer or
+Android change.

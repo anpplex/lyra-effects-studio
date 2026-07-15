@@ -4,7 +4,7 @@
 
 This is M3 slice 2: a cross-platform host-side Dev Bridge server that gives one Lyra runtime a short-lived, authenticated loopback session. It follows the completed portable `lyra-device` protocol, revision and FakeADB core.
 
-The slice itself creates no real ADB process, Android source change, Tauri command or Studio UI. A later user-gated preflight can check a separately selected ADB executable, but it does not consume this endpoint or create a mapping. A typed ADB reverse mapping remains a separately scoped follow-on.
+The server slice itself creates no real ADB process, Android source change, Tauri command or Studio UI. M3 slice 3E now consumes its private endpoint only inside an explicit Tauri mapping action; the server still never launches ADB or exposes provisioning material itself.
 
 ## Alternatives considered
 
@@ -54,7 +54,7 @@ impl DevServer {
 }
 ```
 
-`DevServerEndpoint` exposes the loopback socket address, `hello_url()` and a provisioning-only `authorization_value()` method. Tauri retains that endpoint only for a future typed ADB reverse request; it never serializes the endpoint or authorization value. `SessionSnapshot` remains a host-side server read model, while the Studio-facing projection omits its session ID.
+`DevServerEndpoint` exposes the loopback socket address, `hello_url()` and a provisioning-only `authorization_value()` method. Tauri retains that endpoint for one explicit typed ADB reverse request; it never serializes the endpoint or authorization value. `SessionSnapshot` remains a host-side server read model, while the Studio-facing projection omits its session ID.
 
 ## Testing
 
@@ -64,4 +64,4 @@ CI runs the new crate on macOS, Windows and Linux. No test requires `adb`, Andro
 
 ## Follow-on boundary
 
-M3 slice 3A provides narrow Tauri commands and a Studio control that start/stop this server and display non-secret connection state. M3 slice 3B adds the Rust-only `lyra-device` coordinator that requests a typed ADB reverse mapping through injected `FakeAdb` coverage. M3 slice 3C adds the explicit-path, fixed-argv `lyra-adb` process adapter with fake-executor coverage. M3 slice 3D adds a native-chooser, user-gated `devices -l` preflight that remains independent of this listener. A later explicit Tauri action may derive the endpoint port privately and construct a reverse mapping; Android/runtime integration remains separately scoped.
+M3 slice 3A provides narrow Tauri commands and a Studio control that start/stop this server and display non-secret connection state. M3 slice 3B adds the Rust-only `lyra-device` coordinator that requests a typed ADB reverse mapping through injected `FakeAdb` coverage. M3 slice 3C adds the explicit-path, fixed-argv `lyra-adb` process adapter with fake-executor coverage. M3 slice 3D adds a native-chooser, user-gated `devices -l` preflight. M3 slice 3E explicitly derives the endpoint port privately and creates one owned mapping only after a user action; an explicit bridge stop removes that mapping before shutdown and refuses to stop on cleanup failure. Android/runtime provisioning remains separately scoped, and no app-exit cleanup or automatic mapping exists.

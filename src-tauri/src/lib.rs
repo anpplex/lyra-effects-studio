@@ -81,6 +81,33 @@ async fn check_device_bridge_adb(
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+async fn get_device_bridge_mapping_status(
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::DevBridgeMappingStatus, String> {
+    Ok(controller.mapping_status().await)
+}
+
+#[tauri::command]
+async fn enable_device_bridge_mapping(
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::DevBridgeMappingStatus, String> {
+    controller
+        .enable_mapping()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn disable_device_bridge_mapping(
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::DevBridgeMappingStatus, String> {
+    controller
+        .disable_mapping()
+        .await
+        .map_err(|error| error.to_string())
+}
+
 async fn choose_adb_executable(app: &tauri::AppHandle) -> Result<Option<PathBuf>, String> {
     let (sender, receiver) = oneshot::channel();
     app.dialog()
@@ -119,6 +146,9 @@ pub fn run() {
             get_device_bridge_adb_status,
             choose_device_bridge_adb_executable,
             check_device_bridge_adb,
+            get_device_bridge_mapping_status,
+            enable_device_bridge_mapping,
+            disable_device_bridge_mapping,
             project::open_project,
             project::save_project_document,
             project::save_project_style
@@ -144,5 +174,12 @@ mod tests {
         let _ = super::get_device_bridge_adb_status;
         let _ = super::choose_device_bridge_adb_executable;
         let _ = super::check_device_bridge_adb;
+    }
+
+    #[test]
+    fn device_bridge_mapping_commands_are_available() {
+        let _ = super::get_device_bridge_mapping_status;
+        let _ = super::enable_device_bridge_mapping;
+        let _ = super::disable_device_bridge_mapping;
     }
 }
