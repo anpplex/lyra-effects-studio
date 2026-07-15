@@ -196,7 +196,7 @@ git commit -m "docs(adb): publish process adapter boundary"
 - Consumes: an explicit adapter that is not constructed by Tauri and never runs in tests.
 - Produces: a GitHub pull request with Linux, Windows and macOS CI evidence.
 
-- [ ] **Step 1: Run the full local release gate.**
+- [x] **Step 1: Run the full local release gate.**
 
 Run:
 
@@ -214,9 +214,11 @@ git diff --check
 
 Expected: all commands exit 0 without invoking a real ADB binary.
 
-- [ ] **Step 2: Record verification evidence in this plan.**
+- [x] **Step 2: Record verification evidence in this plan.**
 
 Mark Task 2 and Task 3 verification checkboxes `[x]` only after their commands have passed, then run `git diff --check` before committing the plan status.
+
+Verified locally on 2026-07-15: Studio lint, 25 Studio tests, Studio production build, Rust formatting, workspace Clippy, workspace tests, workspace release build and the no-bundle Tauri debug build all exited successfully. The Tauri CLI was installed with the README-mandated root `npm ci`; all adapter tests used the in-memory executor and no real ADB binary ran.
 
 - [ ] **Step 3: Push, open a pull request and squash-merge after CI.**
 
