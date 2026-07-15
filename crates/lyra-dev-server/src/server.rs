@@ -8,13 +8,13 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
-use lyra_device::{DeviceDiagnostic, DeviceHello, HostPolicy, negotiate};
+use lyra_device::{DeviceDiagnostic, DeviceHello, HostPolicy, NegotiatedSession, negotiate};
 use serde::Serialize;
 use tokio::net::TcpListener;
-use tokio::sync::oneshot;
+use tokio::sync::{RwLock, oneshot};
 use tokio::task::JoinHandle;
 
-use crate::token::BridgeToken;
+use crate::token::{BridgeToken, session_id};
 use crate::{DevServerEndpoint, ServerDiagnostic};
 
 const MAX_HELLO_BYTES: usize = 16 * 1024;
@@ -23,6 +23,7 @@ const MAX_HELLO_BYTES: usize = 16 * 1024;
 pub struct DevServer {
     shutdown: oneshot::Sender<()>,
     task: JoinHandle<Result<(), std::io::Error>>,
+    state: Arc<ServerState>,
 }
 
 impl DevServer {
@@ -45,11 +46,12 @@ impl DevServer {
         let state = Arc::new(ServerState {
             policy,
             token: token.clone(),
+            session: RwLock::new(None),
         });
         let router = Router::new()
             .route("/v1/hello", post(hello))
             .layer(axum::extract::DefaultBodyLimit::max(MAX_HELLO_BYTES))
-            .with_state(state);
+            .with_state(Arc::clone(&state));
         let (shutdown, shutdown_signal) = oneshot::channel();
         let task = tokio::spawn(async move {
             axum::serve(listener, router)
@@ -60,7 +62,11 @@ impl DevServer {
         });
 
         Ok((
-            Self { shutdown, task },
+            Self {
+                shutdown,
+                task,
+                state,
+            },
             DevServerEndpoint::new(address, token),
         ))
     }
@@ -81,25 +87,53 @@ impl DevServer {
                 ServerDiagnostic::new("device.bridge.serverStopped", error.to_string())
             })
     }
+
+    /// Returns the current non-secret device session, if one has been authenticated.
+    #[must_use]
+    pub async fn session_snapshot(&self) -> Option<SessionSnapshot> {
+        self.state.session.read().await.clone()
+    }
 }
 
 struct ServerState {
     policy: HostPolicy,
     token: BridgeToken,
+    session: RwLock<Option<SessionSnapshot>>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct HelloAccepted {
-    protocol_version: String,
-    capabilities: Vec<String>,
+/// Non-secret state for the one authenticated device session.
+pub struct SessionSnapshot {
+    pub session_id: String,
+    pub device_profile_id: String,
+    pub protocol_version: String,
+    pub capabilities: Vec<String>,
+}
+
+impl SessionSnapshot {
+    fn create(
+        hello: &DeviceHello,
+        negotiated: &NegotiatedSession,
+    ) -> Result<Self, ServerDiagnostic> {
+        Ok(Self {
+            session_id: session_id()?,
+            device_profile_id: hello.device_profile_id.clone(),
+            protocol_version: negotiated.protocol_version.to_string(),
+            capabilities: negotiated
+                .capabilities
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+        })
+    }
 }
 
 async fn hello(
     State(state): State<Arc<ServerState>>,
     headers: HeaderMap,
     body: Bytes,
-) -> Result<Json<HelloAccepted>, ApiError> {
+) -> Result<Json<SessionSnapshot>, ApiError> {
     if !state
         .token
         .matches_authorization(headers.get(AUTHORIZATION))
@@ -120,17 +154,59 @@ async fn hello(
 
     let hello = DeviceHello::from_slice(&body)
         .map_err(|error| ApiError::from_device(StatusCode::BAD_REQUEST, error))?;
+    if let Some(snapshot) = state.snapshot_for_profile(&hello.device_profile_id).await? {
+        return Ok(Json(snapshot));
+    }
     let negotiated = negotiate(&hello, &state.policy)
         .map_err(|error| ApiError::from_device(StatusCode::UNPROCESSABLE_ENTITY, error))?;
+    let snapshot = state.claim_session(&hello, &negotiated).await?;
 
-    Ok(Json(HelloAccepted {
-        protocol_version: negotiated.protocol_version.to_string(),
-        capabilities: negotiated
-            .capabilities
-            .iter()
-            .map(ToString::to_string)
-            .collect(),
-    }))
+    Ok(Json(snapshot))
+}
+
+impl ServerState {
+    async fn snapshot_for_profile(
+        &self,
+        device_profile_id: &str,
+    ) -> Result<Option<SessionSnapshot>, ApiError> {
+        let session = self.session.read().await;
+        match session.as_ref() {
+            Some(snapshot) if snapshot.device_profile_id == device_profile_id => {
+                Ok(Some(snapshot.clone()))
+            }
+            Some(_) => Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "device.bridge.sessionActive",
+                "a different device profile already owns this server",
+            )),
+            None => Ok(None),
+        }
+    }
+
+    async fn claim_session(
+        &self,
+        hello: &DeviceHello,
+        negotiated: &NegotiatedSession,
+    ) -> Result<SessionSnapshot, ApiError> {
+        let mut session = self.session.write().await;
+        match session.as_ref() {
+            Some(snapshot) if snapshot.device_profile_id == hello.device_profile_id => {
+                Ok(snapshot.clone())
+            }
+            Some(_) => Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "device.bridge.sessionActive",
+                "a different device profile already owns this server",
+            )),
+            None => {
+                let snapshot = SessionSnapshot::create(hello, negotiated).map_err(|error| {
+                    ApiError::from_server(StatusCode::INTERNAL_SERVER_ERROR, error)
+                })?;
+                *session = Some(snapshot.clone());
+                Ok(snapshot)
+            }
+        }
+    }
 }
 
 fn is_json(headers: &HeaderMap) -> bool {
@@ -159,6 +235,10 @@ impl ApiError {
             status,
             diagnostic: ServerDiagnostic::new(diagnostic.code, diagnostic.message),
         }
+    }
+
+    fn from_server(status: StatusCode, diagnostic: ServerDiagnostic) -> Self {
+        Self { status, diagnostic }
     }
 }
 

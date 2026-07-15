@@ -49,6 +49,44 @@ async fn hello_requires_an_application_json_content_type() {
     server.shutdown().await.unwrap();
 }
 
+#[tokio::test]
+async fn hello_creates_a_snapshot_with_the_negotiated_intersection() {
+    let (server, endpoint) = start_test_server().await;
+
+    let accepted = send_authorized_hello(&endpoint, hello_fixture()).await;
+    assert_eq!(accepted.status, 200);
+    assert_eq!(
+        accepted.json["capabilities"],
+        serde_json::json!(["activate", "stageRevision"])
+    );
+    assert_eq!(accepted.json["sessionId"].as_str().unwrap().len(), 32);
+    let snapshot = server.session_snapshot().await.unwrap();
+    assert_eq!(snapshot.device_profile_id, "com.avatr.cluster.4032x284");
+    assert_eq!(snapshot.capabilities, ["activate", "stageRevision"]);
+
+    server.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn same_profile_reconnect_is_idempotent_but_another_profile_is_rejected() {
+    let (server, endpoint) = start_test_server().await;
+
+    let first = send_authorized_hello(&endpoint, hello_fixture()).await;
+    let repeat = send_authorized_hello(&endpoint, hello_fixture()).await;
+    assert_eq!(first.status, 200);
+    assert_eq!(first.json["sessionId"], repeat.json["sessionId"]);
+
+    let another_profile = hello_with_profile("other.profile");
+    let conflict = send_authorized_hello(&endpoint, &another_profile).await;
+    assert_response(&conflict, 409, "device.bridge.sessionActive");
+    assert_eq!(
+        server.session_snapshot().await.unwrap().device_profile_id,
+        "com.avatr.cluster.4032x284"
+    );
+
+    server.shutdown().await.unwrap();
+}
+
 async fn start_test_server() -> (DevServer, DevServerEndpoint) {
     let policy = HostPolicy::new(
         "1.2.0",
@@ -65,6 +103,17 @@ fn hello_fixture() -> &'static [u8] {
 
 fn incompatible_fixture() -> &'static [u8] {
     include_bytes!("../../../Fixtures/Device/hello-incompatible.json")
+}
+
+fn hello_with_profile(device_profile_id: &str) -> Vec<u8> {
+    let mut hello: Value = serde_json::from_slice(hello_fixture()).unwrap();
+    hello["deviceProfileId"] = Value::String(device_profile_id.into());
+    serde_json::to_vec(&hello).unwrap()
+}
+
+async fn send_authorized_hello(endpoint: &DevServerEndpoint, body: &[u8]) -> Response {
+    let authorization = endpoint.authorization_value();
+    send_hello(endpoint, Some(&authorization), body).await
 }
 
 async fn send_hello(

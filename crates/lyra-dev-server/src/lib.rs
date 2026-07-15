@@ -8,7 +8,7 @@ use std::fmt;
 use std::net::SocketAddr;
 
 pub use diagnostic::ServerDiagnostic;
-pub use server::DevServer;
+pub use server::{DevServer, SessionSnapshot};
 
 use token::BridgeToken;
 

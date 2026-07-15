@@ -38,6 +38,14 @@ impl BridgeToken {
     }
 }
 
+pub(crate) fn session_id() -> Result<String, ServerDiagnostic> {
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).map_err(|error| {
+        ServerDiagnostic::new("device.bridge.sessionGenerationFailed", error.to_string())
+    })?;
+    Ok(hex(&bytes))
+}
+
 fn hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
 
