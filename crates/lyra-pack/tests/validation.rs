@@ -61,6 +61,22 @@ fn rejects_script_entry_even_when_the_script_file_is_missing() {
 }
 
 #[test]
+fn rejects_executable_extensions_without_unix_permission_bits() {
+    let fixture = make_pack("theme/lyra.css");
+    fs::write(fixture.path().join("deploy.ps1"), "Write-Output unsafe")
+        .expect("Windows script fixture");
+
+    let codes: BTreeSet<_> = PackValidator::default()
+        .validate(fixture.path())
+        .expect("validate")
+        .into_iter()
+        .map(|diagnostic| diagnostic.code)
+        .collect();
+
+    assert!(codes.contains("file.executableForbidden"));
+}
+
+#[test]
 fn all_license_cleared_registry_packs_validate() {
     let pack_root = repository_root().join("Registry/Packs");
     for entry in fs::read_dir(pack_root).expect("Registry packs") {
