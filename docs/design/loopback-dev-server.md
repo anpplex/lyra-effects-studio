@@ -64,4 +64,4 @@ CI runs the new crate on macOS, Windows and Linux. No test requires `adb`, Andro
 
 ## Follow-on boundary
 
-M3 slice 3A now provides narrow Tauri commands and a Studio control that start/stop this server and display non-secret connection state. M3 slice 3B will add a Rust-only coordinator that requests a typed ADB reverse mapping through injected `FakeAdb` coverage. Only after that fake-first coverage exists should a real Android adapter consume the endpoint.
+M3 slice 3A provides narrow Tauri commands and a Studio control that start/stop this server and display non-secret connection state. M3 slice 3B now adds the Rust-only `lyra-device` coordinator that requests a typed ADB reverse mapping through injected `FakeAdb` coverage. A later Tauri integration may derive the endpoint port privately and inject a real adapter; only after separate process and Android coverage exists may that adapter consume the endpoint.

@@ -60,6 +60,8 @@ Serials, ports and device paths are validated types. There is no raw command-str
 
 `FakeAdb` consumes an ordered JSON transcript and verifies operation names and typed arguments exactly. Its fixtures cover single-device deployment, zero or multiple transports, offline and unauthorized devices, configured transport failures, unsafe inputs and unexpected call order.
 
+`DevBridgeReverseCoordinator` composes those operations without owning a process adapter. Its request accepts only a validated host `LocalPort` and always uses the fixed Android-side `DEV_BRIDGE_REMOTE_PORT` value `49321`. It selects exactly one transport in `device` state, creates a typed reverse mapping and returns an explicit mapping handle for `remove_reverse`. Zero ready transports return `device.adb.noEligibleDevice`; multiple ready transports return `device.adb.multipleEligibleDevices`. Neither selection failure issues a reverse call.
+
 ## Stable diagnostics
 
 Callers branch on codes rather than English messages. The v1 core currently defines:
@@ -75,6 +77,8 @@ Callers branch on codes rather than English messages. The v1 core currently defi
 | `device.adb.invalidLocalPort` | Local port is zero |
 | `device.adb.invalidRemotePort` | Remote port is zero |
 | `device.adb.invalidDevicePath` | Android destination is relative or traversing |
+| `device.adb.noEligibleDevice` | No ADB transport is ready for the Dev Bridge mapping |
+| `device.adb.multipleEligibleDevices` | More than one ADB transport is ready; automatic selection is unsafe |
 | `device.fakeAdb.invalidTranscript` | Transcript JSON is malformed |
 | `device.fakeAdb.unexpectedCall` | Operation order or arguments differ from the transcript |
 | `device.fakeAdb.pendingCalls` | A test finished before consuming every configured operation |
@@ -87,6 +91,6 @@ Callers branch on codes rather than English messages. The v1 core currently defi
 
 ## Current boundary
 
-Studio's Tauri shell exposes only `get_device_bridge_status`, `start_device_bridge` and `stop_device_bridge`. They manage one ephemeral IPv4-loopback listener and return `stopped`, `waiting` or `connected`. A connected status projects only device profile, negotiated protocol version and sorted capabilities; the bearer, endpoint URL/port and server session ID remain inside Rust.
+Studio's Tauri shell exposes only `get_device_bridge_status`, `start_device_bridge` and `stop_device_bridge`. They manage one ephemeral IPv4-loopback listener and return `stopped`, `waiting` or `connected`. A connected status projects only device profile, negotiated protocol version and sorted capabilities; the bearer, endpoint URL/port and server session ID remain inside Rust. The portable reverse coordinator has no Tauri command yet: a future adapter must derive the local port from that private endpoint and inject a real `AdbClient` separately.
 
 This milestone does not execute `adb`, discover Android SDK paths or modify the Lyra APK. It has no LAN listener, WebSocket, command, Pack or filesystem endpoint beyond the authenticated `POST /v1/hello` route. Future adapters must remain thin consumers of `lyra-device` and `lyra-dev-server`, preserve these stable codes and receive separate process, transport and Android integration tests.

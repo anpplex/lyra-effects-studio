@@ -79,6 +79,9 @@ macro_rules! port_type {
 port_type!(LocalPort, "device.adb.invalidLocalPort");
 port_type!(RemotePort, "device.adb.invalidRemotePort");
 
+/// Fixed Android-side TCP port for the Lyra Dev Bridge reverse mapping.
+pub const DEV_BRIDGE_REMOTE_PORT: RemotePort = RemotePort(49_321);
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DevicePath(String);
 

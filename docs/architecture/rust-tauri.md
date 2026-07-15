@@ -7,7 +7,7 @@ Lyra Effects Studio uses a portable Rust domain layer and a small Tauri 2 deskto
 - `lyra-pack` owns Pack contracts, validation and deterministic archives.
 - `lyra-project` owns Device Profiles, scenarios, parameter schemas, project detection and CSS patching.
 - `lyra-registry` owns canonical Catalogs and Ed25519 verification.
-- `lyra-device` owns Dev Bridge hello/negotiation, revision lifecycle semantics and typed ADB boundaries.
+- `lyra-device` owns Dev Bridge hello/negotiation, revision lifecycle semantics, typed ADB boundaries and the FakeADB-proven single-device reverse coordinator.
 - `lyra-dev-server` owns the authenticated IPv4-loopback hello listener and one-profile session ownership. It depends on `lyra-device`; `lyra-device` remains HTTP- and runtime-free.
 - `lyra-effects` exposes the portable core as a JSON-speaking CLI.
 - `src-tauri` exposes narrowly scoped project commands plus local Dev Bridge lifecycle commands to the frontend. It owns desktop lifetime, not HTTP protocol, validation or Registry trust decisions.
@@ -19,7 +19,7 @@ The Lyra Android application remains Kotlin. Desktop and Android exchange versio
 
 The original Swift production implementation has been removed after Rust parity tests covered Pack bytes, canonical Catalog behavior, signatures, diagnostics and CLI workflows. Rust is now the sole production implementation for the desktop core and CLI.
 
-M3 adds the portable device domain, an authenticated IPv4-loopback hello server and a narrow Tauri lifecycle boundary. `lyra-dev-server` owns real TCP protocol behavior; `src-tauri` starts or gracefully stops one instance and retains provisioning material privately. The Studio frontend receives only `stopped`, `waiting` or `connected` plus a projection containing device profile, negotiated protocol version and capabilities. It never receives the bearer, endpoint URL/port or server session ID. JSON fixtures continue to drive hello parsing and strict FakeADB transcripts. A later adapter may compose the same typed `AdbClient` operations with the retained endpoint, but arbitrary shell commands remain absent from the domain API.
+M3 adds the portable device domain, an authenticated IPv4-loopback hello server, a narrow Tauri lifecycle boundary and a fake-first reverse coordinator. `lyra-dev-server` owns real TCP protocol behavior; `src-tauri` starts or gracefully stops one instance and retains provisioning material privately. `lyra-device` selects exactly one ready transport and can map a caller-supplied loopback port to the fixed Android Dev Bridge port `49321` through injected `AdbClient`. The Studio frontend receives only `stopped`, `waiting` or `connected` plus a projection containing device profile, negotiated protocol version and capabilities. It never receives the bearer, endpoint URL/port or server session ID. JSON fixtures continue to drive hello parsing and strict FakeADB transcripts. A future real adapter may compose the same typed operations with the retained endpoint, but arbitrary shell commands remain absent from the domain API.
 
 ## Platform gates
 
