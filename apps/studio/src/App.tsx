@@ -5,6 +5,7 @@ import {
   backend,
   isTauriRuntime,
   type AdbPreflightStatus,
+  type DevBridgeMappingStatus,
   type DeviceBridgeStatus,
   type ProjectSnapshot,
 } from "./lib/backend";
@@ -187,6 +188,7 @@ function createPreviewNonce(): string {
 
 const STOPPED_DEVICE_BRIDGE: DeviceBridgeStatus = { state: "stopped", session: null };
 const UNCONFIGURED_ADB_PREFLIGHT: AdbPreflightStatus = { configured: false, readiness: "unconfigured" };
+const INACTIVE_DEVICE_MAPPING: DevBridgeMappingStatus = { readiness: "inactive" };
 
 function bridgeStatusLabel(status: DeviceBridgeStatus, loading: boolean, failed: boolean): string {
   if (failed) return "Bridge unavailable";
@@ -212,6 +214,15 @@ function adbPreflightLabel(status: AdbPreflightStatus, loading: boolean, failed:
   return "ADB not configured";
 }
 
+function mappingLabel(status: DevBridgeMappingStatus, loading: boolean, failed: boolean): string {
+  if (status.readiness === "cleanupFailed") return "Retry mapping removal";
+  if (failed) return "Mapping failed";
+  if (loading || status.readiness === "enabling") return "Enabling mapping…";
+  if (status.readiness === "active") return "Mapping active";
+  if (status.readiness === "removing") return "Removing mapping…";
+  return "Mapping off";
+}
+
 function App() {
   const [state, setState] = useState(createStudioState);
   const [search, setSearch] = useState("");
@@ -230,6 +241,10 @@ function App() {
   const [adbPreflightLoading, setAdbPreflightLoading] = useState(true);
   const [adbPreflightBusy, setAdbPreflightBusy] = useState(false);
   const [adbPreflightError, setAdbPreflightError] = useState(false);
+  const [deviceMapping, setDeviceMapping] = useState<DevBridgeMappingStatus>(INACTIVE_DEVICE_MAPPING);
+  const [deviceMappingLoading, setDeviceMappingLoading] = useState(true);
+  const [deviceMappingBusy, setDeviceMappingBusy] = useState(false);
+  const [deviceMappingError, setDeviceMappingError] = useState(false);
   const sourceEditorRef = useRef<HTMLTextAreaElement>(null);
   const previewFrameRef = useRef<HTMLIFrameElement>(null);
 
@@ -353,6 +368,25 @@ function App() {
     void refreshDeviceBridge();
   }, [refreshDeviceBridge]);
 
+  const refreshDeviceMapping = useCallback(async (): Promise<DevBridgeMappingStatus | undefined> => {
+    setDeviceMappingLoading(true);
+    try {
+      const next = await backend.deviceBridgeMappingStatus();
+      setDeviceMapping(next);
+      setDeviceMappingError(false);
+      return next;
+    } catch {
+      setDeviceMappingError(true);
+      return undefined;
+    } finally {
+      setDeviceMappingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshDeviceMapping();
+  }, [refreshDeviceMapping]);
+
   const toggleDeviceBridge = async () => {
     if (deviceBridgeLoading || deviceBridgeBusy) return;
     if (deviceBridgeError) {
@@ -365,6 +399,8 @@ function App() {
         ? await backend.startDeviceBridge()
         : await backend.stopDeviceBridge();
       setDeviceBridge(next);
+      setDeviceBridgeError(false);
+      await refreshDeviceMapping();
     } catch {
       setDeviceBridgeError(true);
     } finally {
@@ -411,6 +447,22 @@ function App() {
       setAdbPreflightError(true);
     } finally {
       setAdbPreflightBusy(false);
+    }
+  };
+
+  const toggleDeviceMapping = async () => {
+    if (!canToggleMapping) return;
+    setDeviceMappingBusy(true);
+    try {
+      const next = deviceMapping.readiness === "active" || deviceMapping.readiness === "cleanupFailed"
+        ? await backend.disableDeviceBridgeMapping()
+        : await backend.enableDeviceBridgeMapping();
+      setDeviceMapping(next);
+      setDeviceMappingError(false);
+    } catch {
+      await refreshDeviceMapping();
+    } finally {
+      setDeviceMappingBusy(false);
     }
   };
 
@@ -492,6 +544,39 @@ function App() {
   const adbPreflightLabelText = adbPreflightLabel(adbPreflight, adbPreflightLoading, adbPreflightError);
   const adbSelectAction = adbPreflightBusy ? "Working…" : "Select ADB";
   const adbCheckAction = adbPreflightLoading ? "Checking…" : adbPreflightBusy ? "Working…" : "Check devices";
+  const mappingPhase = deviceMapping.readiness === "cleanupFailed"
+    ? "cleanupFailed"
+    : deviceMappingError
+      ? "error"
+      : deviceMappingLoading
+        ? "loading"
+        : deviceMapping.readiness;
+  const mappingLabelText = mappingLabel(deviceMapping, deviceMappingLoading, deviceMappingError);
+  const mappingAction = deviceMappingBusy
+    ? deviceMapping.readiness === "active" || deviceMapping.readiness === "cleanupFailed" ? "Removing…" : "Enabling…"
+    : deviceMapping.readiness === "cleanupFailed"
+      ? "Retry remove"
+      : deviceMapping.readiness === "active"
+        ? "Remove mapping"
+        : "Enable mapping";
+  const canToggleMapping = deviceBridge.state !== "stopped"
+    && adbPreflight.readiness === "oneReadyDevice"
+    && !deviceBridgeLoading
+    && !deviceBridgeBusy
+    && !deviceBridgeError
+    && !adbPreflightLoading
+    && !adbPreflightBusy
+    && !adbPreflightError
+    && !deviceMappingLoading
+    && !deviceMappingBusy
+    && deviceMapping.readiness !== "enabling"
+    && deviceMapping.readiness !== "removing"
+    && (!deviceMappingError || deviceMapping.readiness === "cleanupFailed");
+  const adbSelectionDisabled = adbPreflightBusy
+    || deviceMappingLoading
+    || deviceMappingBusy
+    || deviceMappingError
+    || deviceMapping.readiness !== "inactive";
 
   return (
     <main className="studio-shell" data-testid="studio-shell">
@@ -514,13 +599,17 @@ function App() {
         <div className="publish-block">
           <section className="device-adb-control" data-testid="device-adb-control" aria-label="ADB device check">
             <span className={`device-adb-status ${adbPreflightPhase}`} role="status" aria-live="polite"><i /><span className="device-adb-label">{adbPreflightLabelText}</span></span>
-            <button className="quiet-button device-adb-action" data-testid="device-adb-select" disabled={adbPreflightBusy} onClick={() => void chooseDeviceBridgeAdb()}>{adbSelectAction}</button>
+            <button className="quiet-button device-adb-action" data-testid="device-adb-select" disabled={adbSelectionDisabled} onClick={() => void chooseDeviceBridgeAdb()}>{adbSelectAction}</button>
             <button className="quiet-button device-adb-action" data-testid="device-adb-check" disabled={adbPreflightLoading || adbPreflightBusy || adbPreflightError || !adbPreflight.configured} onClick={() => void checkDeviceBridgeAdb()}>{adbCheckAction}</button>
           </section>
           <section className="device-bridge-control" data-testid="device-bridge-control" aria-label="Device bridge">
             <span className={`device-bridge-status ${bridgePhase}`} role="status" aria-live="polite" title={bridgeStatusDetail(deviceBridge)}><i /><span className="device-bridge-label">{bridgeLabel}</span></span>
             {deviceBridgeError && <span className="bridge-error" role="alert">Status check failed</span>}
             <button className="quiet-button bridge-action" data-testid="device-bridge-toggle" disabled={deviceBridgeLoading || deviceBridgeBusy} onClick={() => void toggleDeviceBridge()}>{bridgeAction}</button>
+          </section>
+          <section className="device-mapping-control" data-testid="device-mapping-control" aria-label="Dev Bridge mapping">
+            <span className={`device-mapping-status ${mappingPhase}`} role="status" aria-live="polite"><i /><span className="device-mapping-label">{mappingLabelText}</span></span>
+            <button className="quiet-button device-mapping-action" data-testid="device-mapping-toggle" disabled={!canToggleMapping} onClick={() => void toggleDeviceMapping()}>{mappingAction}</button>
           </section>
           <button className="primary-button"><Icon name="download" />Build pack</button>
         </div>
