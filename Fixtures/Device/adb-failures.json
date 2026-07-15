@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "operation": "listDevices",
+      "result": {
+        "devices": [
+          { "serial": "AVATR-01", "state": "device" },
+          { "serial": "AVATR-02", "state": "offline" },
+          { "serial": "AVATR-03", "state": "unauthorized" }
+        ]
+      }
+    },
+    {
+      "operation": "reverse",
+      "serial": "AVATR-01",
+      "localPort": 49321,
+      "remotePort": 49321,
+      "result": {
+        "error": { "code": "device.adb.reverseFailed", "message": "reverse unavailable" }
+      }
+    },
+    {
+      "operation": "push",
+      "serial": "AVATR-01",
+      "localPath": "/tmp/revision.zip",
+      "devicePath": "/data/local/tmp/lyra/revision.zip",
+      "result": {
+        "error": { "code": "device.adb.pushFailed", "message": "push unavailable" }
+      }
+    }
+  ]
+}

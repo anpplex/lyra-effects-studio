@@ -1,0 +1,30 @@
+{
+  "steps": [
+    {
+      "operation": "listDevices",
+      "result": {
+        "devices": [{ "serial": "AVATR-CLUSTER-01", "state": "device" }]
+      }
+    },
+    {
+      "operation": "reverse",
+      "serial": "AVATR-CLUSTER-01",
+      "localPort": 49321,
+      "remotePort": 49321,
+      "result": {}
+    },
+    {
+      "operation": "push",
+      "serial": "AVATR-CLUSTER-01",
+      "localPath": "/tmp/revision.zip",
+      "devicePath": "/data/local/tmp/lyra/revision.zip",
+      "result": {}
+    },
+    {
+      "operation": "removeReverse",
+      "serial": "AVATR-CLUSTER-01",
+      "remotePort": 49321,
+      "result": {}
+    }
+  ]
+}

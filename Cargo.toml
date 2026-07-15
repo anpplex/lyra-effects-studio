@@ -4,6 +4,7 @@ members = [
     "crates/lyra-pack",
     "crates/lyra-project",
     "crates/lyra-registry",
+    "crates/lyra-device",
     "crates/lyra-cli",
     "src-tauri",
 ]
