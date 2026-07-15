@@ -219,7 +219,7 @@ git commit -m "docs(device): publish reverse coordinator boundary"
 - Consumes: no real process adapter, no Android source, and no new frontend command.
 - Produces: a reviewable GitHub pull request with cross-platform CI evidence.
 
-- [ ] **Step 1: Run the full local release gate.**
+- [x] **Step 1: Run the full local release gate.**
 
 Run:
 
@@ -237,7 +237,7 @@ git diff --check
 
 Expected: all commands exit 0. The Tauri build validates the existing shell without adding an ADB runtime adapter.
 
-- [ ] **Step 2: Mark Task 2 and Task 3 verification checkboxes only after evidence exists.**
+- [x] **Step 2: Mark Task 2 and Task 3 verification checkboxes only after evidence exists.**
 
 Mark the relevant completed checkboxes in this plan, then run `git diff --check` again before committing the plan status.
 
