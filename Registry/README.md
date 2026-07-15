@@ -9,6 +9,8 @@ The initial audit covers all 18 themes in Lyra's Better Lyrics catalog at Lyra r
 
 An exclusion is not a quality judgment. Maintainers can include a theme in a later Registry version after its author adds a compatible license and the evidence is re-audited.
 
+Better Lyrics source Packs declare their stable Android target in `entry.themeId`. The publication script copies that value into the Registry artifact as `themeId`; Lyra uses it to install the verified CSS into the matching local theme slot without coupling the APK to a Pack ID.
+
 Run the gates locally:
 
 ```sh

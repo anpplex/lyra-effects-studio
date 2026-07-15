@@ -14,10 +14,25 @@
     "author": { "type": "object", "required": ["name"] },
     "license": { "type": "object", "required": ["spdx"] },
     "compatibility": { "type": "object", "required": ["packSchema", "runtimeApi", "bridgeApi"] },
-    "entry": { "type": "object" },
+    "entry": {
+      "type": "object",
+      "properties": {
+        "themeId": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$" }
+      }
+    },
     "capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "parameters": { "type": "string" },
     "scenarios": { "type": "array", "items": { "type": "string" } },
     "integrity": { "type": "string" }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "family": { "const": "better-lyrics" } } },
+      "then": {
+        "properties": {
+          "entry": { "required": ["themeId"] }
+        }
+      }
+    }
+  ]
 }

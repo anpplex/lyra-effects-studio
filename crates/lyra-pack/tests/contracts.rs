@@ -71,7 +71,7 @@ fn version_ranges_accept_schema_and_runtime_forms() {
 
 #[test]
 fn manifest_preserves_unknown_top_level_and_nested_fields() {
-    let source = br#"{"schemaVersion":1,"id":"io.github.example.refine","name":"Refine","version":"1.0.0","kind":"theme","family":"better-lyrics","author":{"name":"Author","future":"kept"},"license":{"spdx":"MIT","notice":"NOTICE"},"compatibility":{"packSchema":">=1 <2","runtimeApi":">=1.0.0 <2.0.0","bridgeApi":">=1.0.0 <2.0.0"},"entry":{"style":"theme/lyra.css"},"capabilities":["styles"],"future":{"nested":true}}"#;
+    let source = br#"{"schemaVersion":1,"id":"io.github.example.refine","name":"Refine","version":"1.0.0","kind":"theme","family":"better-lyrics","author":{"name":"Author","future":"kept"},"license":{"spdx":"MIT","notice":"NOTICE"},"compatibility":{"packSchema":">=1 <2","runtimeApi":">=1.0.0 <2.0.0","bridgeApi":">=1.0.0 <2.0.0"},"entry":{"style":"theme/lyra.css","themeId":"refine"},"capabilities":["styles"],"future":{"nested":true}}"#;
 
     let manifest = PackManifest::from_slice(source).expect("decode manifest");
     let round_trip: CanonicalJson =
@@ -114,6 +114,18 @@ fn manifest_rejects_empty_required_names() {
 }
 
 #[test]
+fn better_lyrics_manifest_requires_a_safe_theme_id() {
+    let missing = valid_manifest().replace(",\"themeId\":\"sample\"", "");
+    assert!(PackManifest::from_slice(missing.as_bytes()).is_err());
+
+    assert!(PackManifest::from_slice(valid_manifest().as_bytes()).is_ok());
+
+    let unsafe_id =
+        valid_manifest().replace("\"themeId\":\"sample\"", "\"themeId\":\"../sustain\"");
+    assert!(PackManifest::from_slice(unsafe_id.as_bytes()).is_err());
+}
+
+#[test]
 fn hashes_bytes_as_lowercase_sha256() {
     assert_eq!(
         sha256_hex(b"abc"),
@@ -122,5 +134,5 @@ fn hashes_bytes_as_lowercase_sha256() {
 }
 
 fn valid_manifest() -> String {
-    r#"{"schemaVersion":1,"id":"io.example.pack","name":"Pack","version":"1.0.0","kind":"theme","family":"better-lyrics","author":{"name":"A"},"license":{"spdx":"MIT"},"compatibility":{"packSchema":">=1 <2","runtimeApi":">=1.0.0 <2.0.0","bridgeApi":">=1.0.0 <2.0.0"},"entry":{"style":"theme.css"},"capabilities":["styles"]}"#.into()
+    r#"{"schemaVersion":1,"id":"io.example.pack","name":"Pack","version":"1.0.0","kind":"theme","family":"better-lyrics","author":{"name":"A"},"license":{"spdx":"MIT"},"compatibility":{"packSchema":">=1 <2","runtimeApi":">=1.0.0 <2.0.0","bridgeApi":">=1.0.0 <2.0.0"},"entry":{"style":"theme.css","themeId":"sample"},"capabilities":["styles"]}"#.into()
 }

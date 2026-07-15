@@ -12,6 +12,8 @@ pub struct RegistryPackArtifact {
     pub id: String,
     pub name: String,
     pub family: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_id: Option<String>,
     pub version: SemanticVersion,
     pub manifest_url: String,
     pub download_url: String,

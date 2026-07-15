@@ -10,9 +10,10 @@ use std::path::{Path, PathBuf};
 
 #[test]
 fn catalog_preserves_unknown_catalog_and_pack_fields() {
-    let source = br#"{"schemaVersion":1,"registryId":"org.lyra.effects.official","name":"Official","generatedAt":"2026-07-14T00:00:00Z","keyId":"test-key","packs":[{"id":"org.lyra.effects.one","name":"One","family":"better-lyrics","version":"1.0.0","manifestUrl":"packs/org.lyra.effects.one/1.0.0/lyra-pack.json","downloadUrl":"packs/org.lyra.effects.one/1.0.0/pack.lyra-pack.zip","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","signature":"c2ln","size":10,"minimumRuntimeApi":"1.0.0","packFuture":true}],"future":{"kept":true}}"#;
+    let source = br#"{"schemaVersion":1,"registryId":"org.lyra.effects.official","name":"Official","generatedAt":"2026-07-14T00:00:00Z","keyId":"test-key","packs":[{"id":"org.lyra.effects.one","name":"One","family":"better-lyrics","themeId":"sustain","version":"1.0.0","manifestUrl":"packs/org.lyra.effects.one/1.0.0/lyra-pack.json","downloadUrl":"packs/org.lyra.effects.one/1.0.0/pack.lyra-pack.zip","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","signature":"c2ln","size":10,"minimumRuntimeApi":"1.0.0","packFuture":true}],"future":{"kept":true}}"#;
 
     let catalog = RegistryCatalog::from_slice(source).expect("catalog");
+    assert_eq!(catalog.packs[0].theme_id.as_deref(), Some("sustain"));
     let round_trip: serde_json::Value =
         serde_json::from_slice(&catalog.to_canonical_vec().expect("canonical catalog"))
             .expect("round trip");
@@ -132,6 +133,7 @@ fn artifact(id: &str, version: &str) -> RegistryPackArtifact {
         id: id.into(),
         name: id.into(),
         family: "better-lyrics".into(),
+        theme_id: None,
         version: SemanticVersion::parse(version).expect("version"),
         manifest_url: format!("packs/{id}/{version}/lyra-pack.json"),
         download_url: format!("packs/{id}/{version}/pack.lyra-pack.zip"),

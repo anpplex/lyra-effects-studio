@@ -6,7 +6,7 @@
     "packSchema": ">=1 <2",
     "runtimeApi": ">=1.0.0 <2.0.0"
   },
-  "entry": { "style": "theme/lyra.css" },
+  "entry": { "style": "theme/lyra.css", "themeId": "dynamic-background" },
   "family": "better-lyrics",
   "id": "io.github.chengggit.youtube-music-dynamic-theme",
   "kind": "theme",

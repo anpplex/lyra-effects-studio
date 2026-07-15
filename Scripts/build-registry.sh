@@ -48,6 +48,13 @@ for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
   name="$(jq -er '.name' "$manifest")"
   family="$(jq -er '.family' "$manifest")"
   version="$(jq -er '.version' "$manifest")"
+  theme_id=""
+  if [[ "$family" == "better-lyrics" ]]; then
+    theme_id="$(jq -er '.entry.themeId | strings | select(test("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"))' "$manifest")" || {
+      echo "Better Lyrics Pack is missing a valid entry.themeId: $manifest" >&2
+      exit 65
+    }
+  fi
   version_dir="$OUTPUT_DIR/packs/$id/$version"
   archive="$version_dir/pack.lyra-pack.zip"
   mkdir -p "$version_dir"
@@ -60,11 +67,11 @@ for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
   cp "$manifest" "$version_dir/lyra-pack.json"
 
   entry="$(jq -cn \
-    --arg id "$id" --arg name "$name" --arg family "$family" --arg version "$version" \
+    --arg id "$id" --arg name "$name" --arg family "$family" --arg version "$version" --arg themeId "$theme_id" \
     --arg manifestUrl "packs/$id/$version/lyra-pack.json" \
     --arg downloadUrl "packs/$id/$version/pack.lyra-pack.zip" \
     --arg sha256 "$sha256" --arg signature "$signature" --argjson size "$size" \
-    '{id:$id,name:$name,family:$family,version:$version,manifestUrl:$manifestUrl,downloadUrl:$downloadUrl,sha256:$sha256,signature:$signature,size:$size,minimumRuntimeApi:"1.0.0"}')"
+    '{id:$id,name:$name,family:$family,version:$version} + (if $themeId == "" then {} else {themeId:$themeId} end) + {manifestUrl:$manifestUrl,downloadUrl:$downloadUrl,sha256:$sha256,signature:$signature,size:$size,minimumRuntimeApi:"1.0.0"}')"
   packs="$(jq -cn --argjson packs "$packs" --argjson entry "$entry" '$packs + [$entry]')"
 done
 
