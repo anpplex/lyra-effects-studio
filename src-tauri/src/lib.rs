@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+mod device_bridge;
 mod project;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -24,6 +25,27 @@ fn app_info() -> AppInfo {
     }
 }
 
+#[tauri::command]
+async fn get_device_bridge_status(
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::DeviceBridgeStatus, String> {
+    Ok(controller.status().await)
+}
+
+#[tauri::command]
+async fn start_device_bridge(
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::DeviceBridgeStatus, String> {
+    controller.start().await.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn stop_device_bridge(
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::DeviceBridgeStatus, String> {
+    controller.stop().await.map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Starts the desktop application runtime.
 ///
@@ -33,8 +55,12 @@ fn app_info() -> AppInfo {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .manage(device_bridge::DeviceBridgeController::new())
         .invoke_handler(tauri::generate_handler![
             app_info,
+            get_device_bridge_status,
+            start_device_bridge,
+            stop_device_bridge,
             project::open_project,
             project::save_project_document,
             project::save_project_style
