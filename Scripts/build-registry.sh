@@ -50,7 +50,7 @@ for pack_dir in "$REPO_ROOT"/Registry/Packs/*; do
   version="$(jq -er '.version' "$manifest")"
   theme_id=""
   if [[ "$family" == "better-lyrics" ]]; then
-    theme_id="$(jq -er '.entry.themeId | strings | select(test("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"))' "$manifest")" || {
+    theme_id="$(jq -er '.entry.themeId | strings | select(length <= 64 and test("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"))' "$manifest")" || {
       echo "Better Lyrics Pack is missing a valid entry.themeId: $manifest" >&2
       exit 65
     }

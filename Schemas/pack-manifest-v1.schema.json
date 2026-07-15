@@ -17,7 +17,7 @@
     "entry": {
       "type": "object",
       "properties": {
-        "themeId": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$" }
+        "themeId": { "type": "string", "maxLength": 64, "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$" }
       }
     },
     "capabilities": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },

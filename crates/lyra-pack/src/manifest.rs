@@ -159,7 +159,8 @@ fn is_valid_pack_id(id: &str) -> bool {
 
 fn is_valid_theme_id(id: &str) -> bool {
     let bytes = id.as_bytes();
-    !bytes.is_empty()
+    bytes.len() <= 64
+        && !bytes.is_empty()
         && bytes[0] != b'-'
         && bytes[bytes.len() - 1] != b'-'
         && bytes

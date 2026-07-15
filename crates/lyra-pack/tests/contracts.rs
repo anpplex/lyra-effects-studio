@@ -123,6 +123,12 @@ fn better_lyrics_manifest_requires_a_safe_theme_id() {
     let unsafe_id =
         valid_manifest().replace("\"themeId\":\"sample\"", "\"themeId\":\"../sustain\"");
     assert!(PackManifest::from_slice(unsafe_id.as_bytes()).is_err());
+
+    let oversized_id = valid_manifest().replace(
+        "\"themeId\":\"sample\"",
+        &format!("\"themeId\":\"{}\"", "a".repeat(65)),
+    );
+    assert!(PackManifest::from_slice(oversized_id.as_bytes()).is_err());
 }
 
 #[test]
