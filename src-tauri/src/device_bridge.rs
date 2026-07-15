@@ -1,11 +1,14 @@
 use std::{
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex as StdMutex},
 };
 
 use lyra_adb::SystemAdb;
 use lyra_dev_server::{DevServer, DevServerEndpoint, ServerDiagnostic, SessionSnapshot};
-use lyra_device::{AdbClient, AdbDevice, AdbDeviceState, DeviceDiagnostic, HostPolicy};
+use lyra_device::{
+    AdbClient, AdbDevice, AdbDeviceState, DevBridgeReverseCoordinator, DevBridgeReverseRequest,
+    DeviceDiagnostic, HostPolicy, LocalPort, ReverseMapping,
+};
 use serde::Serialize;
 use tokio::sync::Mutex;
 
@@ -60,10 +63,29 @@ pub(crate) struct AdbPreflightStatus {
     readiness: AdbPreflightReadiness,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum DevBridgeMappingReadiness {
+    Inactive,
+    Enabling,
+    Active,
+    Removing,
+    CleanupFailed,
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DevBridgeMappingStatus {
+    readiness: DevBridgeMappingReadiness,
+}
+
 pub(crate) struct DeviceBridgeController {
     running: Mutex<Option<RunningBridge>>,
     adb_preflight: Mutex<AdbPreflightState>,
-    adb_probe: Arc<dyn AdbDeviceProbe>,
+    adb_client_factory: Arc<dyn AdbClientFactory>,
+    mapping_operation: Mutex<()>,
 }
 
 struct RunningBridge {
@@ -75,27 +97,45 @@ struct AdbPreflightState {
     executable: Option<PathBuf>,
     generation: u64,
     status: AdbPreflightStatus,
+    mapping: MappingState,
 }
 
-trait AdbDeviceProbe: Send + Sync {
-    fn list_devices(&self, executable: &Path) -> Result<Vec<AdbDevice>, DeviceDiagnostic>;
+#[cfg_attr(not(test), allow(dead_code))]
+struct ActiveMapping {
+    mapping: ReverseMapping,
+    adb: Box<dyn AdbClient + Send>,
 }
 
-struct SystemAdbDeviceProbe;
+#[cfg_attr(not(test), allow(dead_code))]
+type SharedActiveMapping = Arc<StdMutex<ActiveMapping>>;
 
-impl AdbDeviceProbe for SystemAdbDeviceProbe {
-    fn list_devices(&self, executable: &Path) -> Result<Vec<AdbDevice>, DeviceDiagnostic> {
-        let mut adb = SystemAdb::from_path(executable);
-        adb.list_devices()
+#[cfg_attr(not(test), allow(dead_code))]
+enum MappingState {
+    Inactive,
+    Enabling,
+    Active(SharedActiveMapping),
+    Removing(SharedActiveMapping),
+    CleanupFailed(SharedActiveMapping),
+}
+
+trait AdbClientFactory: Send + Sync {
+    fn create(&self, executable: &Path) -> Box<dyn AdbClient + Send>;
+}
+
+struct SystemAdbClientFactory;
+
+impl AdbClientFactory for SystemAdbClientFactory {
+    fn create(&self, executable: &Path) -> Box<dyn AdbClient + Send> {
+        Box::new(SystemAdb::from_path(executable))
     }
 }
 
 impl DeviceBridgeController {
     pub(crate) fn new() -> Self {
-        Self::from_probe(Arc::new(SystemAdbDeviceProbe))
+        Self::from_factory(Arc::new(SystemAdbClientFactory))
     }
 
-    fn from_probe(adb_probe: Arc<dyn AdbDeviceProbe>) -> Self {
+    fn from_factory(adb_client_factory: Arc<dyn AdbClientFactory>) -> Self {
         Self {
             running: Mutex::new(None),
             adb_preflight: Mutex::new(AdbPreflightState {
@@ -105,17 +145,19 @@ impl DeviceBridgeController {
                     configured: false,
                     readiness: AdbPreflightReadiness::Unconfigured,
                 },
+                mapping: MappingState::Inactive,
             }),
-            adb_probe,
+            adb_client_factory,
+            mapping_operation: Mutex::new(()),
         }
     }
 
     #[cfg(test)]
-    fn with_probe<P>(adb_probe: Arc<P>) -> Self
+    fn with_factory<F>(adb_client_factory: Arc<F>) -> Self
     where
-        P: AdbDeviceProbe + 'static,
+        F: AdbClientFactory + 'static,
     {
-        Self::from_probe(adb_probe)
+        Self::from_factory(adb_client_factory)
     }
 
     pub(crate) async fn adb_status(&self) -> AdbPreflightStatus {
@@ -137,7 +179,11 @@ impl DeviceBridgeController {
             configured: true,
             readiness: AdbPreflightReadiness::NotChecked,
         };
+        let _operation = self.mapping_operation.lock().await;
         let mut preflight = self.adb_preflight.lock().await;
+        if !matches!(preflight.mapping, MappingState::Inactive) {
+            return Err(mapping_active());
+        }
         preflight.executable = Some(executable);
         preflight.generation = preflight.generation.wrapping_add(1);
         preflight.status = status.clone();
@@ -152,8 +198,12 @@ impl DeviceBridgeController {
                 preflight.generation,
             )
         };
-        let probe = Arc::clone(&self.adb_probe);
-        let result = tokio::task::spawn_blocking(move || probe.list_devices(&executable)).await;
+        let factory = Arc::clone(&self.adb_client_factory);
+        let result = tokio::task::spawn_blocking(move || {
+            let mut adb = factory.create(&executable);
+            adb.list_devices()
+        })
+        .await;
         let mut preflight = self.adb_preflight.lock().await;
         if preflight.generation != generation {
             return Ok(preflight.status.clone());
@@ -183,6 +233,66 @@ impl DeviceBridgeController {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) async fn mapping_status(&self) -> DevBridgeMappingStatus {
+        let preflight = self.adb_preflight.lock().await;
+        mapping_status_from_state(&preflight.mapping)
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) async fn enable_mapping(&self) -> Result<DevBridgeMappingStatus, DeviceDiagnostic> {
+        let _operation = self.mapping_operation.lock().await;
+        let local_port = {
+            let running = self.running.lock().await;
+            let running = running.as_ref().ok_or_else(bridge_not_running)?;
+            LocalPort::new(running.endpoint.address().port()).map_err(|_| bridge_not_running())?
+        };
+        let executable = {
+            let mut preflight = self.adb_preflight.lock().await;
+            match &preflight.mapping {
+                MappingState::Inactive => {}
+                MappingState::CleanupFailed(_) => return Err(mapping_active()),
+                MappingState::Active(_) | MappingState::Enabling | MappingState::Removing(_) => {
+                    return Ok(mapping_status_from_state(&preflight.mapping));
+                }
+            }
+            let executable = preflight.executable.clone().ok_or_else(not_configured)?;
+            preflight.mapping = MappingState::Enabling;
+            executable
+        };
+        let factory = Arc::clone(&self.adb_client_factory);
+        let result = tokio::task::spawn_blocking(move || {
+            let mut adb = factory.create(&executable);
+            let mapping = DevBridgeReverseCoordinator::establish(
+                adb.as_mut(),
+                DevBridgeReverseRequest::new(local_port),
+            )?;
+            Ok::<_, DeviceDiagnostic>(ActiveMapping { mapping, adb })
+        })
+        .await;
+        let mut preflight = self.adb_preflight.lock().await;
+        match result {
+            Ok(Ok(active)) => {
+                preflight.mapping = MappingState::Active(Arc::new(StdMutex::new(active)));
+                Ok(mapping_status_from_state(&preflight.mapping))
+            }
+            Ok(Err(error)) => {
+                preflight.mapping = MappingState::Inactive;
+                Err(error)
+            }
+            Err(_) => {
+                preflight.mapping = MappingState::Inactive;
+                Err(probe_failed())
+            }
+        }
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) async fn disable_mapping(&self) -> Result<DevBridgeMappingStatus, DeviceDiagnostic> {
+        let _operation = self.mapping_operation.lock().await;
+        self.remove_mapping_with_operation().await
+    }
+
     pub(crate) async fn start(&self) -> Result<DeviceBridgeStatus, ServerDiagnostic> {
         let mut running = self.running.lock().await;
         if running.is_none() {
@@ -198,11 +308,58 @@ impl DeviceBridgeController {
     }
 
     pub(crate) async fn stop(&self) -> Result<DeviceBridgeStatus, ServerDiagnostic> {
+        let _operation = self.mapping_operation.lock().await;
+        self.remove_mapping_with_operation()
+            .await
+            .map_err(server_diagnostic_from_device)?;
         let running = self.running.lock().await.take();
         if let Some(running) = running {
             running.server.shutdown().await?;
         }
         Ok(stopped_status())
+    }
+
+    async fn remove_mapping_with_operation(
+        &self,
+    ) -> Result<DevBridgeMappingStatus, DeviceDiagnostic> {
+        let active = {
+            let mut preflight = self.adb_preflight.lock().await;
+            let active = match &preflight.mapping {
+                MappingState::Inactive => return Ok(mapping_status_from_state(&preflight.mapping)),
+                MappingState::Enabling | MappingState::Removing(_) => {
+                    return Ok(mapping_status_from_state(&preflight.mapping));
+                }
+                MappingState::Active(active) | MappingState::CleanupFailed(active) => {
+                    Arc::clone(active)
+                }
+            };
+            preflight.mapping = MappingState::Removing(Arc::clone(&active));
+            active
+        };
+        let worker_mapping = Arc::clone(&active);
+        let removal = tokio::task::spawn_blocking(move || {
+            let mut active = worker_mapping
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let ActiveMapping { mapping, adb } = &mut *active;
+            mapping.remove(adb.as_mut())
+        })
+        .await;
+        let mut preflight = self.adb_preflight.lock().await;
+        match removal {
+            Ok(Ok(())) => {
+                preflight.mapping = MappingState::Inactive;
+                Ok(mapping_status_from_state(&preflight.mapping))
+            }
+            Ok(Err(error)) => {
+                preflight.mapping = MappingState::CleanupFailed(active);
+                Err(error)
+            }
+            Err(_) => {
+                preflight.mapping = MappingState::CleanupFailed(active);
+                Err(probe_failed())
+            }
+        }
     }
 }
 
@@ -210,6 +367,21 @@ fn invalid_executable() -> DeviceDiagnostic {
     DeviceDiagnostic::new(
         "device.adb.invalidExecutable",
         "ADB executable must resolve to a regular file",
+    )
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn bridge_not_running() -> DeviceDiagnostic {
+    DeviceDiagnostic::new(
+        "device.bridge.notRunning",
+        "start the Dev Bridge before enabling its ADB mapping",
+    )
+}
+
+fn mapping_active() -> DeviceDiagnostic {
+    DeviceDiagnostic::new(
+        "device.adb.mappingActive",
+        "remove the active ADB mapping before selecting another executable",
     )
 }
 
@@ -222,6 +394,24 @@ fn not_configured() -> DeviceDiagnostic {
 
 fn probe_failed() -> DeviceDiagnostic {
     DeviceDiagnostic::new("device.adb.probeFailed", "ADB preflight worker failed")
+}
+
+fn server_diagnostic_from_device(error: DeviceDiagnostic) -> ServerDiagnostic {
+    ServerDiagnostic::new(error.code, error.message)
+}
+
+fn mapping_status_from_state(mapping: &MappingState) -> DevBridgeMappingStatus {
+    let readiness = match mapping {
+        MappingState::Inactive => DevBridgeMappingReadiness::Inactive,
+        MappingState::Enabling => DevBridgeMappingReadiness::Enabling,
+        MappingState::Active(_) => DevBridgeMappingReadiness::Active,
+        MappingState::Removing(active) => {
+            debug_assert!(Arc::strong_count(active) > 0);
+            DevBridgeMappingReadiness::Removing
+        }
+        MappingState::CleanupFailed(_) => DevBridgeMappingReadiness::CleanupFailed,
+    };
+    DevBridgeMappingStatus { readiness }
 }
 
 const fn adb_error_status() -> AdbPreflightStatus {
@@ -285,11 +475,14 @@ mod tests {
         time::Duration,
     };
 
-    use lyra_device::{AdbDevice, AdbDeviceState, DeviceDiagnostic, DeviceSerial};
+    use lyra_device::{
+        AdbClient, AdbDevice, AdbDeviceState, DEV_BRIDGE_REMOTE_PORT, DeviceDiagnostic, DevicePath,
+        DeviceSerial, LocalPort, RemotePort,
+    };
 
     use super::{
-        AdbDeviceProbe, AdbPreflightReadiness, AdbPreflightStatus, DeviceBridgeController,
-        DeviceBridgeState,
+        AdbClientFactory, AdbPreflightReadiness, AdbPreflightStatus, DevBridgeMappingReadiness,
+        DeviceBridgeController, DeviceBridgeState,
     };
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
@@ -369,13 +562,13 @@ mod tests {
     #[test]
     fn checking_without_an_executable_returns_a_stable_error_without_probing() {
         tauri::async_runtime::block_on(async {
-            let probe = Arc::new(FakeAdbProbe::default());
-            let controller = DeviceBridgeController::with_probe(Arc::clone(&probe));
+            let factory = Arc::new(FakeAdbClientFactory::default());
+            let controller = DeviceBridgeController::with_factory(Arc::clone(&factory));
 
             let error = controller.check_adb().await.unwrap_err();
 
             assert_eq!(error.code, "device.adb.notConfigured");
-            probe.assert_no_calls();
+            factory.assert_no_clients_created();
         });
     }
 
@@ -383,17 +576,20 @@ mod tests {
     fn explicit_check_maps_only_ready_device_counts() {
         tauri::async_runtime::block_on(async {
             let executable = tempfile::NamedTempFile::new().unwrap();
-            let probe = Arc::new(FakeAdbProbe::from_results([
-                Ok(vec![]),
-                Ok(vec![device("AVATR-01", AdbDeviceState::Device)]),
-                Ok(vec![
+            let factory = Arc::new(FakeAdbClientFactory::from_scripts([
+                vec![FakeAdbCall::List(Ok(vec![]))],
+                vec![FakeAdbCall::List(Ok(vec![device(
+                    "AVATR-01",
+                    AdbDeviceState::Device,
+                )]))],
+                vec![FakeAdbCall::List(Ok(vec![
                     device("AVATR-01", AdbDeviceState::Device),
                     device("AVATR-02", AdbDeviceState::Device),
                     device("OFFLINE", AdbDeviceState::Offline),
                     device("UNAUTHORIZED", AdbDeviceState::Unauthorized),
-                ]),
+                ]))],
             ]));
-            let controller = DeviceBridgeController::with_probe(Arc::clone(&probe));
+            let controller = DeviceBridgeController::with_factory(Arc::clone(&factory));
             controller
                 .configure_adb_executable(executable.path().to_path_buf())
                 .await
@@ -411,7 +607,7 @@ mod tests {
                 controller.check_adb().await.unwrap().readiness,
                 AdbPreflightReadiness::MultipleReadyDevices
             );
-            probe.assert_finished(3);
+            factory.assert_finished(3);
         });
     }
 
@@ -419,11 +615,13 @@ mod tests {
     fn failed_explicit_check_preserves_the_stable_diagnostic_and_safe_error_status() {
         tauri::async_runtime::block_on(async {
             let executable = tempfile::NamedTempFile::new().unwrap();
-            let probe = Arc::new(FakeAdbProbe::from_results([Err(DeviceDiagnostic::new(
-                "device.adb.commandFailed",
-                "adb devices failed",
-            ))]));
-            let controller = DeviceBridgeController::with_probe(Arc::clone(&probe));
+            let factory = Arc::new(FakeAdbClientFactory::from_scripts([vec![
+                FakeAdbCall::List(Err(DeviceDiagnostic::new(
+                    "device.adb.commandFailed",
+                    "adb devices failed",
+                ))),
+            ]]));
+            let controller = DeviceBridgeController::with_factory(Arc::clone(&factory));
             controller
                 .configure_adb_executable(executable.path().to_path_buf())
                 .await
@@ -443,7 +641,7 @@ mod tests {
                 serde_json::to_value(controller.adb_status().await).unwrap(),
                 serde_json::json!({ "configured": true, "readiness": "error" })
             );
-            probe.assert_finished(1);
+            factory.assert_finished(1);
         });
     }
 
@@ -451,7 +649,9 @@ mod tests {
     fn a_probe_worker_failure_maps_to_a_stable_error_status() {
         tauri::async_runtime::block_on(async {
             let executable = tempfile::NamedTempFile::new().unwrap();
-            let controller = DeviceBridgeController::with_probe(Arc::new(PanicProbe));
+            let controller = DeviceBridgeController::with_factory(Arc::new(
+                FakeAdbClientFactory::from_scripts([vec![FakeAdbCall::PanicList]]),
+            ));
             controller
                 .configure_adb_executable(executable.path().to_path_buf())
                 .await
@@ -476,10 +676,10 @@ mod tests {
         let second = tempfile::NamedTempFile::new().unwrap();
         let (started_sender, started_receiver) = mpsc::sync_channel(1);
         let (release_sender, release_receiver) = mpsc::sync_channel(1);
-        let controller = Arc::new(DeviceBridgeController::with_probe(Arc::new(
-            BlockingProbe {
+        let controller = Arc::new(DeviceBridgeController::with_factory(Arc::new(
+            BlockingAdbClientFactory {
                 started_sender,
-                release_receiver: StdMutex::new(release_receiver),
+                release_receiver: Arc::new(StdMutex::new(release_receiver)),
             },
         )));
         controller
@@ -508,62 +708,438 @@ mod tests {
         );
     }
 
-    #[derive(Default)]
-    struct FakeAdbProbe {
-        results: StdMutex<VecDeque<Result<Vec<AdbDevice>, DeviceDiagnostic>>>,
-        calls: StdMutex<Vec<PathBuf>>,
+    #[tokio::test]
+    async fn mapping_requires_a_running_bridge_without_creating_an_adb_client() {
+        let factory = Arc::new(FakeAdbClientFactory::default());
+        let controller = DeviceBridgeController::with_factory(Arc::clone(&factory));
+
+        let error = controller.enable_mapping().await.unwrap_err();
+
+        assert_eq!(error.code, "device.bridge.notRunning");
+        assert_eq!(
+            controller.mapping_status().await.readiness,
+            DevBridgeMappingReadiness::Inactive
+        );
+        factory.assert_no_clients_created();
     }
 
-    impl FakeAdbProbe {
-        fn from_results(
-            results: impl IntoIterator<Item = Result<Vec<AdbDevice>, DeviceDiagnostic>>,
-        ) -> Self {
+    #[tokio::test]
+    async fn mapping_requires_a_configured_adb_without_creating_an_adb_client() {
+        let factory = Arc::new(FakeAdbClientFactory::default());
+        let controller = DeviceBridgeController::with_factory(Arc::clone(&factory));
+        controller.start().await.unwrap();
+
+        let error = controller.enable_mapping().await.unwrap_err();
+
+        assert_eq!(error.code, "device.adb.notConfigured");
+        factory.assert_no_clients_created();
+        controller.stop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn mapping_uses_the_private_listener_port_and_serializes_only_active_state() {
+        let executable = tempfile::NamedTempFile::new().unwrap();
+        let factory = Arc::new(FakeAdbClientFactory::from_scripts([vec![
+            FakeAdbCall::List(Ok(vec![device("AVATR-01", AdbDeviceState::Device)])),
+            FakeAdbCall::Reverse(Ok(())),
+            FakeAdbCall::Remove(Ok(())),
+        ]]));
+        let controller = DeviceBridgeController::with_factory(Arc::clone(&factory));
+        controller
+            .configure_adb_executable(executable.path().to_path_buf())
+            .await
+            .unwrap();
+        controller.start().await.unwrap();
+        let listener_port = {
+            let running = controller.running.lock().await;
+            running.as_ref().unwrap().endpoint.address().port()
+        };
+
+        assert_eq!(
+            controller.enable_mapping().await.unwrap().readiness,
+            DevBridgeMappingReadiness::Active
+        );
+        factory.assert_established_once_with(executable.path(), listener_port);
+        assert_eq!(
+            serde_json::to_value(controller.mapping_status().await).unwrap(),
+            serde_json::json!({ "readiness": "active" })
+        );
+
+        controller.stop().await.unwrap();
+        factory.assert_finished(1);
+    }
+
+    #[tokio::test]
+    async fn mapping_is_idempotent_after_an_active_mapping() {
+        let executable = tempfile::NamedTempFile::new().unwrap();
+        let factory = Arc::new(FakeAdbClientFactory::from_scripts([vec![
+            FakeAdbCall::List(Ok(vec![device("AVATR-01", AdbDeviceState::Device)])),
+            FakeAdbCall::Reverse(Ok(())),
+            FakeAdbCall::Remove(Ok(())),
+        ]]));
+        let controller = ready_mapping_controller(executable.path(), Arc::clone(&factory)).await;
+
+        assert_eq!(
+            controller.enable_mapping().await.unwrap().readiness,
+            DevBridgeMappingReadiness::Active
+        );
+        factory.assert_established_once_with(executable.path(), {
+            let running = controller.running.lock().await;
+            running.as_ref().unwrap().endpoint.address().port()
+        });
+
+        controller.stop().await.unwrap();
+        factory.assert_finished(1);
+    }
+
+    #[tokio::test]
+    async fn mapping_preserves_zero_multiple_and_adapter_diagnostics_without_becoming_active() {
+        let executable = tempfile::NamedTempFile::new().unwrap();
+        let factory = Arc::new(FakeAdbClientFactory::from_scripts([
+            vec![FakeAdbCall::List(Ok(vec![]))],
+            vec![FakeAdbCall::List(Ok(vec![
+                device("AVATR-01", AdbDeviceState::Device),
+                device("AVATR-02", AdbDeviceState::Device),
+            ]))],
+            vec![FakeAdbCall::List(Err(DeviceDiagnostic::new(
+                "device.adb.malformedResponse",
+                "malformed devices response",
+            )))],
+        ]));
+        let controller = DeviceBridgeController::with_factory(Arc::clone(&factory));
+        controller
+            .configure_adb_executable(executable.path().to_path_buf())
+            .await
+            .unwrap();
+        controller.start().await.unwrap();
+
+        for expected_code in [
+            "device.adb.noEligibleDevice",
+            "device.adb.multipleEligibleDevices",
+            "device.adb.malformedResponse",
+        ] {
+            let error = controller.enable_mapping().await.unwrap_err();
+            assert_eq!(error.code, expected_code);
+            assert_eq!(
+                controller.mapping_status().await.readiness,
+                DevBridgeMappingReadiness::Inactive
+            );
+        }
+
+        controller.stop().await.unwrap();
+        factory.assert_finished(3);
+    }
+
+    #[tokio::test]
+    async fn mapping_blocks_replacing_its_adb_executable_until_removed() {
+        let executable = tempfile::NamedTempFile::new().unwrap();
+        let replacement = tempfile::NamedTempFile::new().unwrap();
+        let factory = Arc::new(FakeAdbClientFactory::from_scripts([vec![
+            FakeAdbCall::List(Ok(vec![device("AVATR-01", AdbDeviceState::Device)])),
+            FakeAdbCall::Reverse(Ok(())),
+            FakeAdbCall::Remove(Ok(())),
+        ]]));
+        let controller = ready_mapping_controller(executable.path(), Arc::clone(&factory)).await;
+
+        let error = controller
+            .configure_adb_executable(replacement.path().to_path_buf())
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.code, "device.adb.mappingActive");
+        assert_eq!(
+            controller.disable_mapping().await.unwrap().readiness,
+            DevBridgeMappingReadiness::Inactive
+        );
+        controller.stop().await.unwrap();
+        factory.assert_finished(1);
+    }
+
+    #[tokio::test]
+    async fn mapping_disable_is_idempotent_while_inactive_without_creating_an_adb_client() {
+        let factory = Arc::new(FakeAdbClientFactory::default());
+        let controller = DeviceBridgeController::with_factory(Arc::clone(&factory));
+
+        assert_eq!(
+            controller.disable_mapping().await.unwrap().readiness,
+            DevBridgeMappingReadiness::Inactive
+        );
+        factory.assert_no_clients_created();
+    }
+
+    #[tokio::test]
+    async fn mapping_stop_keeps_the_bridge_running_after_cleanup_failure_until_an_explicit_retry() {
+        let executable = tempfile::NamedTempFile::new().unwrap();
+        let factory = Arc::new(FakeAdbClientFactory::from_scripts([vec![
+            FakeAdbCall::List(Ok(vec![device("AVATR-01", AdbDeviceState::Device)])),
+            FakeAdbCall::Reverse(Ok(())),
+            FakeAdbCall::Remove(Err(DeviceDiagnostic::new(
+                "device.adb.commandFailed",
+                "remove failed",
+            ))),
+            FakeAdbCall::Remove(Ok(())),
+        ]]));
+        let controller = ready_mapping_controller(executable.path(), Arc::clone(&factory)).await;
+
+        let error = controller.stop().await.unwrap_err();
+        assert_eq!(error.code, "device.adb.commandFailed");
+        assert_eq!(
+            controller.mapping_status().await.readiness,
+            DevBridgeMappingReadiness::CleanupFailed
+        );
+        assert_eq!(controller.status().await.state, DeviceBridgeState::Waiting);
+
+        assert_eq!(
+            controller.disable_mapping().await.unwrap().readiness,
+            DevBridgeMappingReadiness::Inactive
+        );
+        assert_eq!(
+            controller.stop().await.unwrap().state,
+            DeviceBridgeState::Stopped
+        );
+        factory.assert_finished(1);
+    }
+
+    #[tokio::test]
+    async fn mapping_worker_panics_leave_establish_inactive_and_cleanup_retryable() {
+        let establish_executable = tempfile::NamedTempFile::new().unwrap();
+        let establish_factory = Arc::new(FakeAdbClientFactory::from_scripts([vec![
+            FakeAdbCall::List(Ok(vec![device("AVATR-01", AdbDeviceState::Device)])),
+            FakeAdbCall::PanicReverse,
+        ]]));
+        let establish = DeviceBridgeController::with_factory(Arc::clone(&establish_factory));
+        establish
+            .configure_adb_executable(establish_executable.path().to_path_buf())
+            .await
+            .unwrap();
+        establish.start().await.unwrap();
+
+        let establish_error = establish.enable_mapping().await.unwrap_err();
+        assert_eq!(establish_error.code, "device.adb.probeFailed");
+        assert_eq!(
+            establish.mapping_status().await.readiness,
+            DevBridgeMappingReadiness::Inactive
+        );
+        establish.stop().await.unwrap();
+
+        let remove_executable = tempfile::NamedTempFile::new().unwrap();
+        let remove_factory = Arc::new(FakeAdbClientFactory::from_scripts([vec![
+            FakeAdbCall::List(Ok(vec![device("AVATR-01", AdbDeviceState::Device)])),
+            FakeAdbCall::Reverse(Ok(())),
+            FakeAdbCall::PanicRemove,
+            FakeAdbCall::Remove(Ok(())),
+        ]]));
+        let remove =
+            ready_mapping_controller(remove_executable.path(), Arc::clone(&remove_factory)).await;
+
+        let remove_error = remove.disable_mapping().await.unwrap_err();
+        assert_eq!(remove_error.code, "device.adb.probeFailed");
+        assert_eq!(
+            remove.mapping_status().await.readiness,
+            DevBridgeMappingReadiness::CleanupFailed
+        );
+        assert_eq!(
+            remove.disable_mapping().await.unwrap().readiness,
+            DevBridgeMappingReadiness::Inactive
+        );
+        remove.stop().await.unwrap();
+        remove_factory.assert_finished(1);
+    }
+
+    enum FakeAdbCall {
+        List(Result<Vec<AdbDevice>, DeviceDiagnostic>),
+        Reverse(Result<(), DeviceDiagnostic>),
+        Remove(Result<(), DeviceDiagnostic>),
+        PanicList,
+        PanicReverse,
+        PanicRemove,
+    }
+
+    #[derive(Default)]
+    struct FakeAdbClientFactory {
+        scripts: StdMutex<VecDeque<VecDeque<FakeAdbCall>>>,
+        created_paths: StdMutex<Vec<PathBuf>>,
+        reverse_ports: Arc<StdMutex<Vec<u16>>>,
+    }
+
+    struct FakeAdbClient {
+        calls: VecDeque<FakeAdbCall>,
+        reverse_ports: Arc<StdMutex<Vec<u16>>>,
+    }
+
+    impl FakeAdbClientFactory {
+        fn from_scripts<I, S>(scripts: I) -> Self
+        where
+            I: IntoIterator<Item = S>,
+            S: IntoIterator<Item = FakeAdbCall>,
+        {
             Self {
-                results: StdMutex::new(results.into_iter().collect()),
-                calls: StdMutex::new(Vec::new()),
+                scripts: StdMutex::new(
+                    scripts
+                        .into_iter()
+                        .map(|script| script.into_iter().collect())
+                        .collect(),
+                ),
+                created_paths: StdMutex::new(Vec::new()),
+                reverse_ports: Arc::new(StdMutex::new(Vec::new())),
             }
         }
 
-        fn assert_no_calls(&self) {
-            assert!(self.calls.lock().unwrap().is_empty());
+        fn assert_no_clients_created(&self) {
+            assert!(self.created_paths.lock().unwrap().is_empty());
         }
 
-        fn assert_finished(&self, expected_calls: usize) {
-            assert!(self.results.lock().unwrap().is_empty());
-            assert_eq!(self.calls.lock().unwrap().len(), expected_calls);
+        fn assert_established_once_with(&self, executable: &Path, local_port: u16) {
+            assert_eq!(
+                self.created_paths.lock().unwrap().as_slice(),
+                [executable.canonicalize().unwrap()]
+            );
+            assert_eq!(self.reverse_ports.lock().unwrap().as_slice(), [local_port]);
+        }
+
+        fn assert_finished(&self, expected_clients: usize) {
+            assert!(self.scripts.lock().unwrap().is_empty());
+            assert_eq!(self.created_paths.lock().unwrap().len(), expected_clients);
         }
     }
 
-    impl AdbDeviceProbe for FakeAdbProbe {
-        fn list_devices(&self, executable: &Path) -> Result<Vec<AdbDevice>, DeviceDiagnostic> {
-            self.calls.lock().unwrap().push(executable.into());
-            self.results
-                .lock()
-                .unwrap()
+    impl AdbClientFactory for FakeAdbClientFactory {
+        fn create(&self, executable: &Path) -> Box<dyn AdbClient + Send> {
+            self.created_paths.lock().unwrap().push(executable.into());
+            Box::new(FakeAdbClient {
+                calls: self
+                    .scripts
+                    .lock()
+                    .unwrap()
+                    .pop_front()
+                    .expect("unexpected ADB client"),
+                reverse_ports: Arc::clone(&self.reverse_ports),
+            })
+        }
+    }
+
+    impl FakeAdbClient {
+        fn next(&mut self, operation: &str) -> FakeAdbCall {
+            self.calls
                 .pop_front()
-                .expect("unexpected ADB probe")
+                .unwrap_or_else(|| panic!("unexpected ADB {operation} call"))
         }
     }
 
-    struct PanicProbe;
+    impl AdbClient for FakeAdbClient {
+        fn list_devices(&mut self) -> Result<Vec<AdbDevice>, DeviceDiagnostic> {
+            match self.next("list_devices") {
+                FakeAdbCall::List(result) => result,
+                FakeAdbCall::PanicList => panic!("simulated ADB list worker failure"),
+                _ => panic!("expected ADB list_devices call"),
+            }
+        }
 
-    impl AdbDeviceProbe for PanicProbe {
-        fn list_devices(&self, _: &Path) -> Result<Vec<AdbDevice>, DeviceDiagnostic> {
-            panic!("simulated ADB probe worker failure");
+        fn reverse(
+            &mut self,
+            serial: &DeviceSerial,
+            local: LocalPort,
+            remote: RemotePort,
+        ) -> Result<(), DeviceDiagnostic> {
+            assert_eq!(serial.to_string(), "AVATR-01");
+            assert_eq!(remote, DEV_BRIDGE_REMOTE_PORT);
+            self.reverse_ports.lock().unwrap().push(local.get());
+            match self.next("reverse") {
+                FakeAdbCall::Reverse(result) => result,
+                FakeAdbCall::PanicReverse => panic!("simulated ADB reverse worker failure"),
+                _ => panic!("expected ADB reverse call"),
+            }
+        }
+
+        fn remove_reverse(
+            &mut self,
+            serial: &DeviceSerial,
+            remote: RemotePort,
+        ) -> Result<(), DeviceDiagnostic> {
+            assert_eq!(serial.to_string(), "AVATR-01");
+            assert_eq!(remote, DEV_BRIDGE_REMOTE_PORT);
+            match self.next("remove_reverse") {
+                FakeAdbCall::Remove(result) => result,
+                FakeAdbCall::PanicRemove => panic!("simulated ADB remove worker failure"),
+                _ => panic!("expected ADB remove_reverse call"),
+            }
+        }
+
+        fn push(
+            &mut self,
+            _: &DeviceSerial,
+            _: &Path,
+            _: &DevicePath,
+        ) -> Result<(), DeviceDiagnostic> {
+            panic!("ADB push is forbidden in device bridge tests")
         }
     }
 
-    struct BlockingProbe {
+    struct BlockingAdbClientFactory {
         started_sender: mpsc::SyncSender<()>,
-        release_receiver: StdMutex<mpsc::Receiver<()>>,
+        release_receiver: Arc<StdMutex<mpsc::Receiver<()>>>,
     }
 
-    impl AdbDeviceProbe for BlockingProbe {
-        fn list_devices(&self, _: &Path) -> Result<Vec<AdbDevice>, DeviceDiagnostic> {
+    impl AdbClientFactory for BlockingAdbClientFactory {
+        fn create(&self, _: &Path) -> Box<dyn AdbClient + Send> {
+            Box::new(BlockingAdbClient {
+                started_sender: self.started_sender.clone(),
+                release_receiver: Arc::clone(&self.release_receiver),
+            })
+        }
+    }
+
+    struct BlockingAdbClient {
+        started_sender: mpsc::SyncSender<()>,
+        release_receiver: Arc<StdMutex<mpsc::Receiver<()>>>,
+    }
+
+    impl AdbClient for BlockingAdbClient {
+        fn list_devices(&mut self) -> Result<Vec<AdbDevice>, DeviceDiagnostic> {
             self.started_sender.send(()).unwrap();
             self.release_receiver.lock().unwrap().recv().unwrap();
             Ok(vec![device("AVATR-01", AdbDeviceState::Device)])
         }
+
+        fn reverse(
+            &mut self,
+            _: &DeviceSerial,
+            _: LocalPort,
+            _: RemotePort,
+        ) -> Result<(), DeviceDiagnostic> {
+            panic!("unexpected ADB reverse from preflight")
+        }
+
+        fn remove_reverse(
+            &mut self,
+            _: &DeviceSerial,
+            _: RemotePort,
+        ) -> Result<(), DeviceDiagnostic> {
+            panic!("unexpected ADB remove from preflight")
+        }
+
+        fn push(
+            &mut self,
+            _: &DeviceSerial,
+            _: &Path,
+            _: &DevicePath,
+        ) -> Result<(), DeviceDiagnostic> {
+            panic!("unexpected ADB push from preflight")
+        }
+    }
+
+    async fn ready_mapping_controller(
+        executable: &Path,
+        factory: Arc<FakeAdbClientFactory>,
+    ) -> DeviceBridgeController {
+        let controller = DeviceBridgeController::with_factory(factory);
+        controller
+            .configure_adb_executable(executable.to_path_buf())
+            .await
+            .unwrap();
+        controller.start().await.unwrap();
+        controller.enable_mapping().await.unwrap();
+        controller
     }
 
     fn device(serial: &str, state: AdbDeviceState) -> AdbDevice {
