@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import "./App.css";
-import { backend, isTauriRuntime, type ProjectSnapshot } from "./lib/backend";
+import { backend, isTauriRuntime, type DeviceBridgeStatus, type ProjectSnapshot } from "./lib/backend";
 import {
   createStudioState,
   selectPack,
@@ -179,6 +179,22 @@ function createPreviewNonce(): string {
   return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
+const STOPPED_DEVICE_BRIDGE: DeviceBridgeStatus = { state: "stopped", session: null };
+
+function bridgeStatusLabel(status: DeviceBridgeStatus, loading: boolean, failed: boolean): string {
+  if (failed) return "Bridge unavailable";
+  if (loading) return "Checking bridge…";
+  if (status.state === "waiting") return "Waiting for Lyra";
+  if (status.state === "connected") return "Lyra connected";
+  return "Bridge off";
+}
+
+function bridgeStatusDetail(status: DeviceBridgeStatus): string | undefined {
+  if (status.state !== "connected") return undefined;
+  if (!status.session) return "Session details unavailable";
+  return `${status.session.deviceProfileId} · ${status.session.protocolVersion} · ${status.session.capabilities.join(", ")}`;
+}
+
 function App() {
   const [state, setState] = useState(createStudioState);
   const [search, setSearch] = useState("");
@@ -189,6 +205,10 @@ function App() {
   const [sourceReplace, setSourceReplace] = useState("");
   const [sourceCaseSensitive, setSourceCaseSensitive] = useState(false);
   const [previewNonce] = useState(createPreviewNonce);
+  const [deviceBridge, setDeviceBridge] = useState<DeviceBridgeStatus>(STOPPED_DEVICE_BRIDGE);
+  const [deviceBridgeLoading, setDeviceBridgeLoading] = useState(true);
+  const [deviceBridgeBusy, setDeviceBridgeBusy] = useState(false);
+  const [deviceBridgeError, setDeviceBridgeError] = useState(false);
   const sourceEditorRef = useRef<HTMLTextAreaElement>(null);
   const previewFrameRef = useRef<HTMLIFrameElement>(null);
 
@@ -296,6 +316,41 @@ function App() {
     }
   }, [projectSession]);
 
+  const refreshDeviceBridge = useCallback(async () => {
+    setDeviceBridgeLoading(true);
+    try {
+      setDeviceBridge(await backend.deviceBridgeStatus());
+      setDeviceBridgeError(false);
+    } catch {
+      setDeviceBridgeError(true);
+    } finally {
+      setDeviceBridgeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshDeviceBridge();
+  }, [refreshDeviceBridge]);
+
+  const toggleDeviceBridge = async () => {
+    if (deviceBridgeLoading || deviceBridgeBusy) return;
+    if (deviceBridgeError) {
+      await refreshDeviceBridge();
+      return;
+    }
+    setDeviceBridgeBusy(true);
+    try {
+      const next = deviceBridge.state === "stopped"
+        ? await backend.startDeviceBridge()
+        : await backend.stopDeviceBridge();
+      setDeviceBridge(next);
+    } catch {
+      setDeviceBridgeError(true);
+    } finally {
+      setDeviceBridgeBusy(false);
+    }
+  };
+
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === "s") {
@@ -357,6 +412,15 @@ function App() {
     "--lyric-zone": `${state.parameters.rightZone}%`,
     "--lyric-motion": `${state.parameters.motion}s`,
   } as React.CSSProperties;
+  const bridgePhase = deviceBridgeError ? "error" : deviceBridgeLoading ? "loading" : deviceBridge.state;
+  const bridgeLabel = bridgeStatusLabel(deviceBridge, deviceBridgeLoading, deviceBridgeError);
+  const bridgeAction = deviceBridgeLoading
+    ? "Checking…"
+    : deviceBridgeBusy
+      ? deviceBridge.state === "stopped" ? "Starting…" : "Stopping…"
+      : deviceBridgeError
+        ? "Retry"
+        : deviceBridge.state === "stopped" ? "Start bridge" : "Stop bridge";
 
   return (
     <main className="studio-shell" data-testid="studio-shell">
@@ -376,7 +440,14 @@ function App() {
           <button className="icon-button" aria-label="Refresh preview"><Icon name="refresh" /></button>
           <button className="play-button" data-testid="play-toggle" onClick={() => setState((current) => ({ ...current, preview: { ...current.preview, playing: !current.preview.playing } }))}><Icon name={state.preview.playing ? "pause" : "play"} />{state.preview.playing ? "Pause" : "Play"}</button>
         </div>
-        <div className="publish-block"><span className="connection-status"><i />Local preview</span><button className="primary-button"><Icon name="download" />Build pack</button></div>
+        <div className="publish-block">
+          <section className="device-bridge-control" data-testid="device-bridge-control" aria-label="Device bridge">
+            <span className={`device-bridge-status ${bridgePhase}`} role="status" aria-live="polite" title={bridgeStatusDetail(deviceBridge)}><i /><span className="device-bridge-label">{bridgeLabel}</span></span>
+            {deviceBridgeError && <span className="bridge-error" role="alert">Status check failed</span>}
+            <button className="quiet-button bridge-action" data-testid="device-bridge-toggle" disabled={deviceBridgeLoading || deviceBridgeBusy} onClick={() => void toggleDeviceBridge()}>{bridgeAction}</button>
+          </section>
+          <button className="primary-button"><Icon name="download" />Build pack</button>
+        </div>
       </header>
 
       <div className="workspace">

@@ -33,6 +33,21 @@ describe("Studio workspace", () => {
     expect(screen.getByTestId("parameter-fontSize")).toHaveValue("48");
   });
 
+  it("starts and stops the local device bridge without displaying provisioning data", async () => {
+    const user = userEvent.setup();
+    render(<StrictMode><App /></StrictMode>);
+
+    const control = await screen.findByTestId("device-bridge-control");
+    expect(await screen.findByText("Bridge off")).toBeInTheDocument();
+    expect(control).not.toHaveTextContent("Bearer");
+
+    await user.click(screen.getByTestId("device-bridge-toggle"));
+    expect(await screen.findByText("Waiting for Lyra")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("device-bridge-toggle"));
+    expect(await screen.findByText("Bridge off")).toBeInTheDocument();
+  });
+
   it("generates project controls from the parameter schema with undo support", async () => {
     const user = userEvent.setup();
     render(<StrictMode><App /></StrictMode>);
