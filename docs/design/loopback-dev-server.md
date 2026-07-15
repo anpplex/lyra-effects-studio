@@ -25,7 +25,7 @@ Content-Type: application/json
 Body: DeviceHello
 ```
 
-The request body is decoded by `DeviceHello::from_slice`, then negotiated with the host `HostPolicy`. A successful response is JSON with `sessionId`, `deviceProfileId`, negotiated `protocolVersion` and sorted `capabilities`. The host can query an immutable `SessionSnapshot` from the `DevServer` handle; this is the future Tauri-facing read model.
+The request body is decoded by `DeviceHello::from_slice`, then negotiated with the host `HostPolicy`. A successful response is JSON with `sessionId`, `deviceProfileId`, negotiated `protocolVersion` and sorted `capabilities`. The host can query an immutable `SessionSnapshot` from the `DevServer` handle. The Tauri controller projects that snapshot into a smaller `DeviceBridgeSession` before serializing it for Studio, dropping `sessionId` alongside all provisioning material.
 
 The first accepted hello creates the session. Repeating the same `deviceProfileId` is idempotent and returns the existing snapshot, which supports a runtime reconnect. A different profile is rejected until the host stops and starts a new server; this prevents one endpoint from silently switching vehicles or displays.
 
@@ -54,7 +54,7 @@ impl DevServer {
 }
 ```
 
-`DevServerEndpoint` exposes the loopback socket address, `hello_url()` and a provisioning-only `authorization_value()` method. `SessionSnapshot` contains no secret and is serializable for the future Tauri command layer.
+`DevServerEndpoint` exposes the loopback socket address, `hello_url()` and a provisioning-only `authorization_value()` method. Tauri retains that endpoint only for a future typed ADB reverse request; it never serializes the endpoint or authorization value. `SessionSnapshot` remains a host-side server read model, while the Studio-facing projection omits its session ID.
 
 ## Testing
 
@@ -64,4 +64,4 @@ CI runs the new crate on macOS, Windows and Linux. No test requires `adb`, Andro
 
 ## Follow-on boundary
 
-M3 slice 3 will add narrow Tauri commands and Studio device UI that start/stop this server, display non-secret connection state and request the typed ADB reverse mapping. Only after that UI has FakeADB and Fake Bridge coverage should a real Android adapter consume the endpoint.
+M3 slice 3A now provides narrow Tauri commands and a Studio control that start/stop this server and display non-secret connection state. M3 slice 3B will add a Rust-only coordinator that requests a typed ADB reverse mapping through injected `FakeAdb` coverage. Only after that fake-first coverage exists should a real Android adapter consume the endpoint.

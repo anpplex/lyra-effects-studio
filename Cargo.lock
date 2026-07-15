@@ -1992,6 +1992,8 @@ dependencies = [
 name = "lyra-effects-studio-app"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "lyra-dev-server",
+ "lyra-device",
  "lyra-pack",
  "lyra-project",
  "lyra-registry",
@@ -2001,6 +2003,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tempfile",
+ "tokio",
  "walkdir",
 ]
 

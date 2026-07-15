@@ -58,6 +58,19 @@ export interface SaveStyleResult {
   sha256: string;
 }
 
+export type DeviceBridgeState = "stopped" | "waiting" | "connected";
+
+export interface DeviceBridgeSession {
+  deviceProfileId: string;
+  protocolVersion: string;
+  capabilities: string[];
+}
+
+export interface DeviceBridgeStatus {
+  state: DeviceBridgeState;
+  session: DeviceBridgeSession | null;
+}
+
 export type InvokeTransport = (
   command: string,
   arguments_?: Record<string, unknown>,
@@ -65,6 +78,9 @@ export type InvokeTransport = (
 
 export interface StudioBackend {
   appInfo(): Promise<AppInfo>;
+  deviceBridgeStatus(): Promise<DeviceBridgeStatus>;
+  startDeviceBridge(): Promise<DeviceBridgeStatus>;
+  stopDeviceBridge(): Promise<DeviceBridgeStatus>;
   openProject(path: string): Promise<ProjectSnapshot>;
   saveStyle(request: SaveStyleRequest): Promise<SaveStyleResult>;
   saveDocument(request: SaveDocumentRequest): Promise<SaveStyleResult>;
@@ -74,6 +90,15 @@ export function createBackend(invoke: InvokeTransport): StudioBackend {
   return {
     async appInfo() {
       return (await invoke("app_info")) as AppInfo;
+    },
+    async deviceBridgeStatus() {
+      return (await invoke("get_device_bridge_status")) as DeviceBridgeStatus;
+    },
+    async startDeviceBridge() {
+      return (await invoke("start_device_bridge")) as DeviceBridgeStatus;
+    },
+    async stopDeviceBridge() {
+      return (await invoke("stop_device_bridge")) as DeviceBridgeStatus;
     },
     async openProject(path) {
       return (await invoke("open_project", { path })) as ProjectSnapshot;
@@ -202,6 +227,7 @@ export function isTauriRuntime(): boolean {
 
 function createFixtureBackend(): StudioBackend {
   let project = structuredClone(fixtureProject);
+  let deviceBridge: DeviceBridgeStatus = { state: "stopped", session: null };
   return {
     async appInfo() {
       return {
@@ -210,6 +236,19 @@ function createFixtureBackend(): StudioBackend {
         projectContractVersion: 1,
         registryContractVersion: 1,
       };
+    },
+    async deviceBridgeStatus() {
+      return structuredClone(deviceBridge);
+    },
+    async startDeviceBridge() {
+      if (deviceBridge.state === "stopped") {
+        deviceBridge = { state: "waiting", session: null };
+      }
+      return structuredClone(deviceBridge);
+    },
+    async stopDeviceBridge() {
+      deviceBridge = { state: "stopped", session: null };
+      return structuredClone(deviceBridge);
     },
     async openProject() {
       return structuredClone(project);

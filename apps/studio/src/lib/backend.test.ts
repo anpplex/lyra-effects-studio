@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createBackend,
   type AppInfo,
+  type DeviceBridgeStatus,
   type ProjectSnapshot,
   type SaveDocumentRequest,
   type SaveStyleRequest,
@@ -57,5 +58,18 @@ describe("typed backend facade", () => {
     expect(invoke).toHaveBeenNthCalledWith(1, "open_project", { path: "/tmp/theme" });
     expect(invoke).toHaveBeenNthCalledWith(2, "save_project_style", { request: saveRequest });
     expect(invoke).toHaveBeenNthCalledWith(3, "save_project_document", { request: documentRequest });
+  });
+
+  it("uses narrow typed commands for local Dev Bridge controls", async () => {
+    const stopped: DeviceBridgeStatus = { state: "stopped", session: null };
+    const invoke = vi.fn(async () => stopped);
+    const backend = createBackend(invoke);
+
+    await expect(backend.deviceBridgeStatus()).resolves.toEqual(stopped);
+    await expect(backend.startDeviceBridge()).resolves.toEqual(stopped);
+    await expect(backend.stopDeviceBridge()).resolves.toEqual(stopped);
+    expect(invoke).toHaveBeenNthCalledWith(1, "get_device_bridge_status");
+    expect(invoke).toHaveBeenNthCalledWith(2, "start_device_bridge");
+    expect(invoke).toHaveBeenNthCalledWith(3, "stop_device_bridge");
   });
 });
