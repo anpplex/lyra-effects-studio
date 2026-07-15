@@ -4,11 +4,12 @@
 
 M3 starts with a portable `lyra-device` crate that models Dev Bridge negotiation, revision lifecycle and ADB operations without opening sockets, launching `adb` or changing Lyra Android. Every behavior is exercised with shared JSON fixtures and an in-memory fake.
 
-This is the first of three M3 slices:
+M3's completed fake-first foundation is composed in four slices:
 
 1. device protocol, revision state and FakeADB;
 2. loopback Dev Server and authenticated sessions;
-3. Tauri commands and Studio device UI.
+3. Tauri commands and Studio device UI;
+4. portable single-device ADB reverse coordination.
 
 The first slice is complete when success and failure paths can be reproduced on macOS, Windows and Linux without a connected device.
 
@@ -23,6 +24,7 @@ The first slice is complete when success and failure paths can be reproduced on 
 - `protocol`: versioned hello and command/event envelopes, capability intersection and stable `device.*` diagnostics. Unknown JSON fields are retained.
 - `revision`: an explicit state machine for `draft → locallyValidated → staged → active`, rejection, failure, rollback, supersession and formal-Pack restore.
 - `adb`: typed device identity and an `AdbClient` trait. Callers request fixed operations such as list, reverse, push and remove-reverse; they never pass arbitrary shell strings.
+- `reverse`: a stateless Dev Bridge coordinator that selects exactly one ready transport, maps a caller-supplied host port to the fixed Android port `49321`, and returns an explicit retryable cleanup handle.
 - `fake_adb`: an ordered transcript of expected calls and configured results. Unexpected calls fail the test with a structured diagnostic.
 - `Fixtures/Device`: shared valid, incompatible and malformed hello messages plus FakeADB transcripts. Android will consume the same protocol fixtures in M4.
 
@@ -37,8 +39,8 @@ The first slice is complete when success and failure paths can be reproduced on 
 
 ## Testing
 
-Unit tests cover protocol decoding, unknown-field retention, capability negotiation, every allowed/forbidden revision transition and ADB input validation. Transcript tests cover zero, one and multiple devices, offline devices, reverse failure and push failure. CI runs the crate on macOS, Windows and Linux with no real ADB executable.
+Unit tests cover protocol decoding, unknown-field retention, capability negotiation, every allowed/forbidden revision transition and ADB input validation. Transcript tests cover zero, one and multiple devices, offline devices, reverse failure, cleanup failure and push failure. CI runs the crate on macOS, Windows and Linux with no real ADB executable.
 
 ## Follow-on boundary
 
-The Dev Server slice may depend on `lyra-device`; the crate must not depend on Tauri, HTTP/WebSocket libraries or UI types. A later real ADB adapter implements the same trait and is opt-in from Tauri. Android remains unchanged until FakeADB and Fake Bridge coverage is complete.
+The Dev Server slice may depend on `lyra-device`; the crate must not depend on Tauri, HTTP/WebSocket libraries or UI types. A later real ADB adapter implements the same trait and is opt-in from Tauri, which will derive its local port from the private loopback endpoint. Android remains unchanged until FakeADB and Fake Bridge coverage is complete.

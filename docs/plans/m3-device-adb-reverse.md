@@ -71,7 +71,7 @@ impl DevBridgeReverseCoordinator {
 }
 ```
 
-- [ ] **Step 1: Write the failing coordinator contract tests and success transcript.**
+- [x] **Step 1: Write the failing coordinator contract tests and success transcript.**
 
 Create `Fixtures/Device/adb-reverse-single-device.json` with this ordered transcript:
 
@@ -115,13 +115,13 @@ fn fake(source: &str) -> FakeAdb {
 }
 ```
 
-- [ ] **Step 2: Run the focused test to verify the public contract is absent.**
+- [x] **Step 2: Run the focused test to verify the public contract is absent.**
 
 Run: `cargo test -p lyra-device --test reverse_coordinator`
 
 Expected: compilation fails because `DevBridgeReverseCoordinator`, `DevBridgeReverseRequest`, `ReverseMapping` and `DEV_BRIDGE_REMOTE_PORT` are not yet exported.
 
-- [ ] **Step 3: Add the minimal typed coordinator.**
+- [x] **Step 3: Add the minimal typed coordinator.**
 
 In `adb.rs`, define the fixed port inside the module that owns the private `RemotePort` field:
 
@@ -149,7 +149,7 @@ adb.reverse(&serial, request.local_port(), request.remote_port())?;
 
 Build `ReverseMapping` only after the adapter returns success. Its `remove` method borrows `self`, calls `remove_reverse(&serial, remote_port)`, and does not rewrite a failure, so callers can retry cleanup. Re-export all four public items from `lib.rs`.
 
-- [ ] **Step 4: Run focused checks and the full portable crate.**
+- [x] **Step 4: Run focused checks and the full portable crate.**
 
 Run:
 
@@ -162,7 +162,7 @@ cargo clippy -p lyra-device --all-targets -- -D warnings
 
 Expected: every command exits 0; tests consume every `FakeAdb` transcript.
 
-- [ ] **Step 5: Commit the verified implementation.**
+- [x] **Step 5: Commit the verified implementation.**
 
 ```bash
 git add crates/lyra-device/src/adb.rs crates/lyra-device/src/reverse.rs crates/lyra-device/src/lib.rs crates/lyra-device/tests/reverse_coordinator.rs Fixtures/Device/adb-reverse-single-device.json
@@ -184,15 +184,15 @@ git commit -m "feat(device): coordinate Dev Bridge reverse"
 - Consumes: Task 1's public coordinator and stable selection diagnostics.
 - Produces: accurate scope statements that distinguish fake-first reverse policy from a real `adb` process or Android runtime integration.
 
-- [ ] **Step 1: Update the user-facing and architecture documentation.**
+- [x] **Step 1: Update the user-facing and architecture documentation.**
 
 State that Studio still has only three lifecycle commands, while the portable domain now owns a tested coordinator. Document `49321` as the fixed Android-side Dev Bridge port, list both selection diagnostics in the v1 table, and state that a future Tauri integration must derive the local port from the private loopback endpoint and inject a real `AdbClient` separately.
 
-- [ ] **Step 2: Mark the completed Task 1 checkboxes in this plan.**
+- [x] **Step 2: Mark the completed Task 1 checkboxes in this plan.**
 
 Replace only Task 1's five `- [ ]` markers with `- [x]` after its commands and commit have succeeded. Keep Task 2 and Task 3 unchecked until their own work is complete.
 
-- [ ] **Step 3: Verify documentation consistency.**
+- [x] **Step 3: Verify documentation consistency.**
 
 Run:
 
@@ -203,7 +203,7 @@ git diff --check
 
 Expected: no placeholder is introduced by this slice and the diff has no whitespace errors.
 
-- [ ] **Step 4: Commit the documentation.**
+- [x] **Step 4: Commit the documentation.**
 
 ```bash
 git add README.md docs/architecture/rust-tauri.md docs/design/fake-first-device-core.md docs/design/loopback-dev-server.md docs/design/studio-device-bridge.md docs/protocols/dev-bridge-v1.md docs/plans/m3-device-adb-reverse.md

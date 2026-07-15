@@ -109,9 +109,10 @@ release checks.
 
 ## Follow-on boundary
 
-M3 slice 3B will add a Rust-only deployment coordinator that asks an injected
-`AdbClient` to select a typed device and create an ADB reverse mapping to the
-retained loopback endpoint. It will first be proven solely with the existing
-`FakeAdb` transcripts and will add no real process execution. Only after that
-coverage exists may a separately scoped Android/runtime and real ADB adapter
-be considered.
+M3 slice 3B now provides a Rust-only deployment coordinator that asks an
+injected `AdbClient` to select exactly one ready device and create an ADB
+reverse mapping from a future Tauri integration's retained loopback endpoint
+to the fixed Android Dev Bridge port. It is proven solely with `FakeAdb`
+transcripts and adds no real process execution. A separately scoped Tauri
+adapter, process test suite and Android/runtime integration remain required
+before a vehicle can consume the endpoint.
