@@ -2,4 +2,7 @@
 
 mod protocol;
 
-pub use protocol::{Capability, DeviceDiagnostic, DeviceHello, ProtocolVersion};
+pub use protocol::{
+    Capability, DeviceDiagnostic, DeviceHello, HostPolicy, NegotiatedSession, ProtocolVersion,
+    negotiate,
+};

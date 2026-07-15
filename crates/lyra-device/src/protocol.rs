@@ -20,6 +20,13 @@ impl DeviceDiagnostic {
             message: message.into(),
         }
     }
+
+    fn with_code(code: &str, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -48,6 +55,21 @@ impl<'de> Deserialize<'de> for ProtocolVersion {
 #[serde(transparent)]
 pub struct Capability(String);
 
+impl Capability {
+    fn new(source: &str) -> Result<Self, DeviceDiagnostic> {
+        if source.is_empty()
+            || !source
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+        {
+            return Err(DeviceDiagnostic::invalid(format!(
+                "invalid capability: {source}"
+            )));
+        }
+        Ok(Self(source.into()))
+    }
+}
+
 impl fmt::Display for Capability {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
@@ -65,6 +87,19 @@ pub struct DeviceHello {
     pub capabilities: Vec<Capability>,
     #[serde(flatten)]
     pub additional: BTreeMap<String, Value>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HostPolicy {
+    pub protocol_version: ProtocolVersion,
+    pub capabilities: Vec<Capability>,
+    pub required_capabilities: Vec<Capability>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NegotiatedSession {
+    pub protocol_version: ProtocolVersion,
+    pub capabilities: Vec<Capability>,
 }
 
 #[derive(Deserialize)]
@@ -109,4 +144,94 @@ impl DeviceHello {
             additional: raw.additional,
         })
     }
+}
+
+impl HostPolicy {
+    /// Creates a validated host negotiation policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns `device.protocol.invalid` for malformed versions or capability IDs.
+    pub fn new<'a>(
+        protocol_version: &str,
+        capabilities: impl IntoIterator<Item = &'a str>,
+        required_capabilities: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Self, DeviceDiagnostic> {
+        let protocol_version = ProtocolVersion(
+            Version::parse(protocol_version)
+                .map_err(|error| DeviceDiagnostic::invalid(error.to_string()))?,
+        );
+        let capabilities = collect_capabilities(capabilities)?;
+        let required_capabilities = collect_capabilities(required_capabilities)?;
+        if required_capabilities
+            .iter()
+            .any(|required| capabilities.binary_search(required).is_err())
+        {
+            return Err(DeviceDiagnostic::invalid(
+                "required capabilities must be advertised by the host",
+            ));
+        }
+        Ok(Self {
+            protocol_version,
+            capabilities,
+            required_capabilities,
+        })
+    }
+}
+
+/// Negotiates a compatible protocol and capability intersection.
+///
+/// # Errors
+///
+/// Returns a stable diagnostic for incompatible majors or required capabilities.
+pub fn negotiate(
+    hello: &DeviceHello,
+    policy: &HostPolicy,
+) -> Result<NegotiatedSession, DeviceDiagnostic> {
+    if hello.protocol_version.0.major != policy.protocol_version.0.major {
+        return Err(DeviceDiagnostic::with_code(
+            "device.protocol.incompatible",
+            format!(
+                "device protocol {} is incompatible with host {}",
+                hello.protocol_version, policy.protocol_version
+            ),
+        ));
+    }
+    if let Some(missing) = policy
+        .required_capabilities
+        .iter()
+        .find(|required| hello.capabilities.binary_search(required).is_err())
+    {
+        return Err(DeviceDiagnostic::with_code(
+            "device.capability.missing",
+            format!("device is missing required capability {missing}"),
+        ));
+    }
+    let capabilities = policy
+        .capabilities
+        .iter()
+        .filter(|candidate| hello.capabilities.binary_search(candidate).is_ok())
+        .cloned()
+        .collect();
+    let protocol_version = if hello.protocol_version <= policy.protocol_version {
+        hello.protocol_version.clone()
+    } else {
+        policy.protocol_version.clone()
+    };
+    Ok(NegotiatedSession {
+        protocol_version,
+        capabilities,
+    })
+}
+
+fn collect_capabilities<'a>(
+    values: impl IntoIterator<Item = &'a str>,
+) -> Result<Vec<Capability>, DeviceDiagnostic> {
+    let mut capabilities = values
+        .into_iter()
+        .map(Capability::new)
+        .collect::<Result<Vec<_>, _>>()?;
+    capabilities.sort();
+    capabilities.dedup();
+    Ok(capabilities)
 }
