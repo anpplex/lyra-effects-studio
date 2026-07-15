@@ -86,6 +86,6 @@ jobs:
           npm run studio:test
           npm run studio:build
       - name: Test portable Rust core and CLI
-        run: cargo test -p lyra-pack -p lyra-project -p lyra-registry -p lyra-effects
+        run: cargo test -p lyra-pack -p lyra-project -p lyra-registry -p lyra-device -p lyra-effects
       - name: Build release CLI
         run: cargo build -p lyra-effects --release

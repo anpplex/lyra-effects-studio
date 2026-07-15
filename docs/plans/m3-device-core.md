@@ -80,7 +80,7 @@
 - Create: `Fixtures/Device/adb-failures.json`
 
 **Interfaces:**
-- Produces: `AdbClient` trait with `list_devices`, `reverse`, `remove_reverse`, and `push`; `FakeAdb::from_transcript`.
+- Produces: `AdbClient` trait with `list_devices`, `reverse`, `remove_reverse`, and `push`; `FakeAdb::from_slice`.
 
 - [ ] Write transcript tests for zero/one/multiple/offline devices, reverse failure, push failure, unexpected call order and unsafe serial/path/port rejection.
 - [ ] Run `cargo test -p lyra-device --test fake_adb`; expect missing-module failure.

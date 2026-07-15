@@ -7,6 +7,7 @@ Lyra Effects Studio uses a portable Rust domain layer and a small Tauri 2 deskto
 - `lyra-pack` owns Pack contracts, validation and deterministic archives.
 - `lyra-project` owns Device Profiles, scenarios, parameter schemas, project detection and CSS patching.
 - `lyra-registry` owns canonical Catalogs and Ed25519 verification.
+- `lyra-device` owns Dev Bridge hello/negotiation, revision lifecycle semantics and typed ADB boundaries.
 - `lyra-effects` exposes the portable core as a JSON-speaking CLI.
 - `src-tauri` exposes narrowly scoped project commands to the frontend. It does not move validation or Registry trust decisions into JavaScript.
 - `apps/studio` owns the cross-platform editor UI and uses a typed fake backend for browser tests.
@@ -16,6 +17,8 @@ The Lyra Android application remains Kotlin. Desktop and Android exchange versio
 ## Migration status
 
 The original Swift production implementation has been removed after Rust parity tests covered Pack bytes, canonical Catalog behavior, signatures, diagnostics and CLI workflows. Rust is now the sole production implementation for the desktop core and CLI.
+
+M3 adds the portable device domain without yet crossing an operating-system or Android boundary. JSON fixtures drive hello parsing and strict FakeADB transcripts on all three CI operating systems. A later adapter may implement the same typed `AdbClient` operations with a real process, but arbitrary shell commands are intentionally absent from the domain API.
 
 ## Platform gates
 
