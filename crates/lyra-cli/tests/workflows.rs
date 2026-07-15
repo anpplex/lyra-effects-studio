@@ -85,8 +85,10 @@ fn registry_build_script_publishes_better_lyrics_theme_ids() {
     let output_root = TempDir::new().expect("output root");
     let site = output_root.path().join("site");
     let output = Command::new("bash")
-        .arg(repository_root().join("Scripts/build-registry.sh"))
-        .arg(&site)
+        .arg(bash_path(
+            &repository_root().join("Scripts/build-registry.sh"),
+        ))
+        .arg(bash_path(&site))
         .env(
             "LYRA_REGISTRY_PRIVATE_KEY_BASE64",
             STANDARD.encode([7_u8; 32]),
@@ -221,4 +223,14 @@ fn repository_root() -> PathBuf {
 
 fn path(path: &Path) -> &str {
     path.to_str().expect("UTF-8 path")
+}
+
+#[cfg(windows)]
+fn bash_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+#[cfg(not(windows))]
+fn bash_path(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }
