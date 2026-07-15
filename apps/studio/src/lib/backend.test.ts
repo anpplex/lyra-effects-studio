@@ -3,6 +3,7 @@ import {
   createBackend,
   type AdbPreflightStatus,
   type AppInfo,
+  type DevBridgeMappingStatus,
   type DeviceBridgeStatus,
   type ProjectSnapshot,
   type SaveDocumentRequest,
@@ -88,6 +89,20 @@ describe("typed backend facade", () => {
     expect(invoke).toHaveBeenNthCalledWith(1, "get_device_bridge_adb_status");
     expect(invoke).toHaveBeenNthCalledWith(2, "choose_device_bridge_adb_executable");
     expect(invoke).toHaveBeenNthCalledWith(3, "check_device_bridge_adb");
+    expect(invoke).not.toHaveBeenCalledWith(expect.any(String), expect.anything());
+  });
+
+  it("uses no-argument commands for explicit Dev Bridge mapping", async () => {
+    const inactive: DevBridgeMappingStatus = { readiness: "inactive" };
+    const invoke = vi.fn(async () => inactive);
+    const backend = createBackend(invoke);
+
+    await expect(backend.deviceBridgeMappingStatus()).resolves.toEqual(inactive);
+    await expect(backend.enableDeviceBridgeMapping()).resolves.toEqual(inactive);
+    await expect(backend.disableDeviceBridgeMapping()).resolves.toEqual(inactive);
+    expect(invoke).toHaveBeenNthCalledWith(1, "get_device_bridge_mapping_status");
+    expect(invoke).toHaveBeenNthCalledWith(2, "enable_device_bridge_mapping");
+    expect(invoke).toHaveBeenNthCalledWith(3, "disable_device_bridge_mapping");
     expect(invoke).not.toHaveBeenCalledWith(expect.any(String), expect.anything());
   });
 });

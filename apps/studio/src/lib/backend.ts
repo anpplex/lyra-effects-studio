@@ -84,6 +84,17 @@ export interface AdbPreflightStatus {
   readiness: AdbPreflightReadiness;
 }
 
+export type DevBridgeMappingReadiness =
+  | "inactive"
+  | "enabling"
+  | "active"
+  | "removing"
+  | "cleanupFailed";
+
+export interface DevBridgeMappingStatus {
+  readiness: DevBridgeMappingReadiness;
+}
+
 export type InvokeTransport = (
   command: string,
   arguments_?: Record<string, unknown>,
@@ -97,6 +108,9 @@ export interface StudioBackend {
   deviceBridgeAdbStatus(): Promise<AdbPreflightStatus>;
   chooseDeviceBridgeAdbExecutable(): Promise<AdbPreflightStatus>;
   checkDeviceBridgeAdb(): Promise<AdbPreflightStatus>;
+  deviceBridgeMappingStatus(): Promise<DevBridgeMappingStatus>;
+  enableDeviceBridgeMapping(): Promise<DevBridgeMappingStatus>;
+  disableDeviceBridgeMapping(): Promise<DevBridgeMappingStatus>;
   openProject(path: string): Promise<ProjectSnapshot>;
   saveStyle(request: SaveStyleRequest): Promise<SaveStyleResult>;
   saveDocument(request: SaveDocumentRequest): Promise<SaveStyleResult>;
@@ -124,6 +138,15 @@ export function createBackend(invoke: InvokeTransport): StudioBackend {
     },
     async checkDeviceBridgeAdb() {
       return (await invoke("check_device_bridge_adb")) as AdbPreflightStatus;
+    },
+    async deviceBridgeMappingStatus() {
+      return (await invoke("get_device_bridge_mapping_status")) as DevBridgeMappingStatus;
+    },
+    async enableDeviceBridgeMapping() {
+      return (await invoke("enable_device_bridge_mapping")) as DevBridgeMappingStatus;
+    },
+    async disableDeviceBridgeMapping() {
+      return (await invoke("disable_device_bridge_mapping")) as DevBridgeMappingStatus;
     },
     async openProject(path) {
       return (await invoke("open_project", { path })) as ProjectSnapshot;
@@ -254,6 +277,7 @@ function createFixtureBackend(): StudioBackend {
   let project = structuredClone(fixtureProject);
   let deviceBridge: DeviceBridgeStatus = { state: "stopped", session: null };
   let adbPreflight: AdbPreflightStatus = { configured: false, readiness: "unconfigured" };
+  let deviceMapping: DevBridgeMappingStatus = { readiness: "inactive" };
   return {
     async appInfo() {
       return {
@@ -274,6 +298,7 @@ function createFixtureBackend(): StudioBackend {
     },
     async stopDeviceBridge() {
       deviceBridge = { state: "stopped", session: null };
+      deviceMapping = { readiness: "inactive" };
       return structuredClone(deviceBridge);
     },
     async deviceBridgeAdbStatus() {
@@ -286,6 +311,17 @@ function createFixtureBackend(): StudioBackend {
     async checkDeviceBridgeAdb() {
       adbPreflight = { configured: true, readiness: "oneReadyDevice" };
       return structuredClone(adbPreflight);
+    },
+    async deviceBridgeMappingStatus() {
+      return structuredClone(deviceMapping);
+    },
+    async enableDeviceBridgeMapping() {
+      deviceMapping = { readiness: "active" };
+      return structuredClone(deviceMapping);
+    },
+    async disableDeviceBridgeMapping() {
+      deviceMapping = { readiness: "inactive" };
+      return structuredClone(deviceMapping);
     },
     async openProject() {
       return structuredClone(project);
