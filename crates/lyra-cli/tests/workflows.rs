@@ -97,7 +97,9 @@ fn registry_build_script_publishes_better_lyrics_theme_ids() {
 
     assert!(
         output.status.success(),
-        "{}",
+        "status={:?}\nstdout={}\nstderr={}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     let catalog: Value =
