@@ -1,4 +1,8 @@
+use std::path::PathBuf;
+
 use serde::Serialize;
+use tauri_plugin_dialog::DialogExt;
+use tokio::sync::oneshot;
 
 mod device_bridge;
 mod project;
@@ -46,6 +50,57 @@ async fn stop_device_bridge(
     controller.stop().await.map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+async fn get_device_bridge_adb_status(
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::AdbPreflightStatus, String> {
+    Ok(controller.adb_status().await)
+}
+
+#[tauri::command]
+async fn choose_device_bridge_adb_executable(
+    app: tauri::AppHandle,
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::AdbPreflightStatus, String> {
+    let Some(path) = choose_adb_executable(&app).await? else {
+        return Ok(controller.adb_status().await);
+    };
+    controller
+        .configure_adb_executable(path)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn check_device_bridge_adb(
+    controller: tauri::State<'_, device_bridge::DeviceBridgeController>,
+) -> Result<device_bridge::AdbPreflightStatus, String> {
+    controller
+        .check_adb()
+        .await
+        .map_err(|error| error.to_string())
+}
+
+async fn choose_adb_executable(app: &tauri::AppHandle) -> Result<Option<PathBuf>, String> {
+    let (sender, receiver) = oneshot::channel();
+    app.dialog()
+        .file()
+        .set_title("Choose Android Debug Bridge executable")
+        .pick_file(move |selection| {
+            let result = selection
+                .map(|file| {
+                    file.into_path().map_err(|_| {
+                        "device.adb.invalidExecutable: selected file is not a local path".to_owned()
+                    })
+                })
+                .transpose();
+            let _ = sender.send(result);
+        });
+    receiver.await.map_err(|_| {
+        "device.adb.invalidExecutable: ADB file picker closed unexpectedly".to_owned()
+    })?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// Starts the desktop application runtime.
 ///
@@ -61,6 +116,9 @@ pub fn run() {
             get_device_bridge_status,
             start_device_bridge,
             stop_device_bridge,
+            get_device_bridge_adb_status,
+            choose_device_bridge_adb_executable,
+            check_device_bridge_adb,
             project::open_project,
             project::save_project_document,
             project::save_project_style
@@ -79,5 +137,12 @@ mod tests {
         assert_eq!(info.pack_contract, 1);
         assert_eq!(info.project_contract, 1);
         assert_eq!(info.registry_contract, 1);
+    }
+
+    #[test]
+    fn adb_preflight_commands_are_available() {
+        let _ = super::get_device_bridge_adb_status;
+        let _ = super::choose_device_bridge_adb_executable;
+        let _ = super::check_device_bridge_adb;
     }
 }
